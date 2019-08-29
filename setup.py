@@ -52,7 +52,7 @@ setup(
     # There are some restrictions on what makes a valid project name
     # specification here:
     # https://packaging.python.org/specifications/core-metadata/#name
-    name='edc',  # Required
+    name='energy-dashboard-client',  # Required
 
     # Versions should comply with PEP 440:
     # https://www.python.org/dev/peps/pep-0440/
@@ -119,7 +119,7 @@ setup(
         'Topic :: Software Development :: Build Tools',
 
         # Pick your license as you wish
-        'License :: OSI Approved :: MIT License',
+        'License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)',
 
         # Specify the Python versions you support here. In particular, ensure
         # that you indicate whether you support Python 2, Python 3 or both.
@@ -148,7 +148,10 @@ setup(
     #
     # For an analysis of "install_requires" vs pip's requirements files see:
     # https://packaging.python.org/en/latest/requirements.html
-    install_requires=[],  # Optional
+    install_requires=[
+            "energy-dashboard-library",
+            "Click"
+            ],  # Optional
 
     # To provide executable scripts, use entry points in preference to the
     # "scripts" keyword. Entry points provide cross-platform support and allow
@@ -159,7 +162,7 @@ setup(
     # which executes the function `main` from this package when invoked:
     entry_points={  # Optional
         'console_scripts': [
-            'edc=edc:main',
+            'edc=edc.main:cli',
         ],
     }
 )
