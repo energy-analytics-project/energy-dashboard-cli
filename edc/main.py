@@ -1,13 +1,15 @@
-import click
-import json
-import os
-import json
-import subprocess
-import sqlite3
 from jinja2 import Environment, PackageLoader, select_autoescape
 from shutil import make_archive, rmtree
-import tarfile
+import click
+import io
+import json
+import os
 import shutil
+import sqlite3
+import subprocess
+import sys
+import tarfile
+import time
 
 @click.group()
 @click.option('--config-dir', default="~/.config/energy-dashboard", help="config file directory")
@@ -265,6 +267,7 @@ def feed_status(ctx, feed, separator, header):
     counts = [str(lines(os.path.join(target_dir, f))) for f in txtfiles]
     status = [feed]
     status.extend(counts)
+    status.append(str(dbcount(feed, target_dir)))
     click.echo(separator.join(status))
 
 @feed.command('download', short_help='download from source url')
@@ -274,13 +277,11 @@ def feed_download(ctx, feed):
     """
     Download feed
     """
-    cp = subprocess.run(["src/10_down.py"], cwd=target_dir, shell=True, capture_output=True)
-    click.echo(cp.stdout)
-    click.echo(cp.stderr)
+    click.echo(subprocess.run(["src/10_down.py"], cwd=target_dir, shell=True, capture_output=True).stdout)
 
 @feed.command('reset', short_help='reset feed to reprocess stage')
 @click.argument('feed')
-@click.option('--stage', type=click.Choice(['zip', 'xml', 'db']), multiple=True, required=True)
+@click.option('--stage', '-s', type=click.Choice(['zip', 'xml', 'db']), multiple=True, required=True)
 @click.pass_context
 def feed_reset(ctx, feed, stage):
     """
@@ -314,22 +315,40 @@ def feed_archive(ctx, feed, archivedir):
     """
     click.echo(restore_locally(ctx, feed, archivedir))
 
-#@feed.command('backup', short_help='backup feed to S3 bucket(s)')
-#@click.argument('feed')
-#@click.pass_context
-#def feed_backup(ctx, feed):
-#    """
-#    """
-#    pass
-#
-#@feed.command('restore', short_help='restore feed from S3 bucket(s)')
-#@click.argument('feed')
-#@click.pass_context
-#def feed_restore(ctx, feed):
-#    """
-#    """
-#    pass
-#
+
+@feed.command('proc', short_help='Process a feed through the stages')
+@click.argument('feed')
+@click.option('--stage', '-s', type=click.Choice(['zip', 'xml', 'db']))
+@click.pass_context
+def feed_process(ctx, feed, stage):
+    """
+    Process the feed through it's stages:
+
+        FEED/src/10_down.py
+        FEED/src/20_unzp.py
+        FEED/src/30_inse.py
+        FEED/src/40_save.sh
+
+    """
+    process_feed(ctx, feed, stage)
+
+
+def process_feed(ctx, feed, stage):
+    filename    = 'edc.log'
+    cfg         = Config.from_ctx(ctx)
+    feed_dir    = os.path.join(cfg.ed_path(), 'data', feed)
+    src_dir     = os.path.join(feed_dir, 'src')
+    items       = os.listdir(src_dir)
+    srtd_items  = sorted(items)
+    for item in srtd_items:
+        with io.open(filename, 'wb') as writer, io.open(filename, 'rb', 1) as reader:
+            process = subprocess.Popen([os.path.join(src_dir, item)], cwd=feed_dir, shell=True, stdout=writer)
+            while process.poll() is None:
+                click.echo(reader.read())
+                time.sleep(0.5)
+            # Read the remaining
+            click.echo(reader.read())
+
 
 def restore_locally(ctx, feed, archivedir):
     cfg = Config.from_ctx(ctx)
@@ -352,14 +371,29 @@ def archive_locally(ctx, feed, archivedir):
     return make_archive(archive_name, 'gztar', root_dir)
 
 
-def dbcount(feed):
-    try:
-        cnx = sqlite3.connect(os.path.join(target_dir, "db", "%s.db" % feed))
-        for val in cnx.execute("select count(*) from oasis"):
-            return val
-    except:
-        return 0
+#@feed.command('backup', short_help='backup feed to S3 bucket(s)')
+#@click.argument('feed')
+#@click.pass_context
+#def feed_backup(ctx, feed):
+#    """
+#    """
+#    pass
+#
+#@feed.command('restore', short_help='restore feed from S3 bucket(s)')
+#@click.argument('feed')
+#@click.pass_context
+#def feed_restore(ctx, feed):
+#    """
+#    """
+#    pass
+#
 
+def dbcount(feed, feed_dir):
+    try:
+        cnx = sqlite3.connect(os.path.join(feed_dir, "db", "%s.db" % feed))
+        return cnx.execute("select count(*) from oasis").fetchone()[0]
+    except:
+        return -1
 
 def lines(f):
     try:
