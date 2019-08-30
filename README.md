@@ -114,6 +114,7 @@ edc feeds list | grep atl | xargs -L 1 -I {} edc feed status {}
 edc feeds list | grep atl | xargs -L 1 -I {} edc feed status --header {}
 edc feeds list | grep atl | xargs -L 1 -I {} edc feed status --header {}
 edc feeds list | grep mileage | xargs -L 1 -I {} edc feed status --header {}
+edc feeds list | xargs -L 1 -I {} edc feed invoke {} "./src/10_down.py"
 ```
 
 ## Author
