@@ -3,6 +3,7 @@ import json
 import os
 import json
 import subprocess
+import sqlite3
 
 @click.group()
 @click.option('--config-dir', default="~/.config/energy-dashboard", help="config file directory")
@@ -148,10 +149,44 @@ def feed_invoke(ctx, feed, command):
         raise Exception("Feed does not exist at: %s" % target_dir)
     subprocess.run(*command, cwd=target_dir, shell=True)
 
-@feeds.command('status', short_help='show feeds status (NYI)')
-def feeds_status():
-    pass
 
+@feed.command('status', short_help='show feeds status (NYI)')
+@click.argument('feed')
+@click.option('--separator', '-s', default=',')
+@click.option('--header/--no-header', default=False)
+@click.pass_context
+def feed_status(ctx, feed, separator, header):
+    """
+    Return the feed status
+    """
+    cfg = config_from_ctx(ctx)
+    target_dir = os.path.join(cfg.ed_path(), 'data', feed)
+    if not os.path.exists(target_dir):
+        raise Exception("Feed does not exist at: %s" % target_dir)
+    if header:
+        click.echo(separator.join(["feed name","download count","unzipped count","inserted count", "db count"]))
+    txtfiles = ["zip/downloaded.txt", "xml/unzipped.txt", "db/inserted.txt"]
+    counts = [str(lines(os.path.join(target_dir, f))) for f in txtfiles]
+    status = [feed]
+    status.extend(counts)
+    click.echo(separator.join(status))
+
+def dbcount(feed):
+    try:
+        cnx = sqlite3.connect(os.path.join(target_dir, "db", "%s.db" % feed))
+        for val in cnx.execute("select count(*) from oasis"):
+            return val
+    except:
+        return 0
+
+
+def lines(f):
+    try:
+        with open(f, 'r') as x:
+            lines = x.readlines()
+            return len(lines)
+    except:
+        return 0
 
 #------------------------------------------------------------------------------
 # Config Stuff
