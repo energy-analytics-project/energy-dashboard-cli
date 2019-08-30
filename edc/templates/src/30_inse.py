@@ -10,7 +10,11 @@ import xml.dom.minidom as md
 import pprint
 import datetime as dt
 import sqlite3
+import json
 from edl.resources import state
+from edl.resources import log
+from edl.resources import db
+from edl.resources import xml
 
 # -----------------------------------------------------------------------------
 # Custom Glue Code
@@ -18,38 +22,38 @@ from edl.resources import state
 def xml2maps(xml_file):
     """Return a list of maps constructed from the xml file"""
     dom     = md.parse(xml_file)
-    header  = get_element("MessageHeader",  dom)
-    payload = get_element("MessagePayload", dom)
-    rto     = get_element("RTO",            payload)
-    name    = get_element("name",           rto)
-    items   = get_elements("REPORT_ITEM",    rto)
+    header  = xml.get_element("MessageHeader",  dom)
+    payload = xml.get_element("MessagePayload", dom)
+    rto     = xml.get_element("RTO",            payload)
+    name    = xml.get_element("name",           rto)
+    items   = xml.get_elements("REPORT_ITEM",    rto)
     return [xml2map(header, name, item) for item in items] 
 
 def xml2map(header, name, item):
     """Return map"""
     return {
-        "timedate"                : value("TimeDate",           header),
-        "timedate_posix"          : posix(value("TimeDate",     header)),
-        "source"                  : value("Source",             header),
-        "version"                 : value("Version",            header),
-        "name"                    : value_of(name),
-        "system"                  : value("SYSTEM",             item),
-        "tz"                      : value("TZ",                 item),
-        "report"                  : value("REPORT",             item),
-        "mkt_type"                : value("MKT_TYPE",           item),
-        "uom"                     : value("UOM",                item),
-        "interval"                : value("INTERVAL",           item),
-        "sec_per_interval"        : value("SEC_PER_INTERVAL",   item),
-        "data_item"               : value("DATA_ITEM",          item),
-        "resource_name"           : value("RESOURCE_NAME",      item),
-        "opr_date"                : value("OPR_DATE",           item),
-        "opr_date_8601"           : date_8601(value("OPR_DATE", item)),
-        "interval_num"            : value("INTERVAL_NUM",       item),
-        "interval_start_gmt"      : value("INTERVAL_START_GMT", item),
-        "interval_start_posix"    : posix(value("INTERVAL_START_GMT", item)),
-        "interval_end_gmt"        : value("INTERVAL_END_GMT",   item),
-        "interval_end_posix"      : posix(value("INTERVAL_END_GMT", item)),
-        "value"                   : value("VALUE",              item)
+        "timedate"                : xml.value("TimeDate",           header),
+        "timedate_posix"          : xml.posix(xml.value("TimeDate",     header)),
+        "source"                  : xml.value("Source",             header),
+        "version"                 : xml.value("Version",            header),
+        "name"                    : xml.value_of(name),
+        "system"                  : xml.value("SYSTEM",             item),
+        "tz"                      : xml.value("TZ",                 item),
+        "report"                  : xml.value("REPORT",             item),
+        "mkt_type"                : xml.value("MKT_TYPE",           item),
+        "uom"                     : xml.value("UOM",                item),
+        "interval"                : xml.value("INTERVAL",           item),
+        "sec_per_interval"        : xml.value("SEC_PER_INTERVAL",   item),
+        "data_item"               : xml.value("DATA_ITEM",          item),
+        "resource_name"           : xml.value("RESOURCE_NAME",      item),
+        "opr_date"                : xml.value("OPR_DATE",           item),
+        "opr_date_8601"           : xml.date_8601(xml.value("OPR_DATE", item)),
+        "interval_num"            : xml.value("INTERVAL_NUM",       item),
+        "interval_start_gmt"      : xml.value("INTERVAL_START_GMT", item),
+        "interval_start_posix"    : xml.posix(xml.value("INTERVAL_START_GMT", item)),
+        "interval_end_gmt"        : xml.value("INTERVAL_END_GMT",   item),
+        "interval_end_posix"      : xml.posix(xml.value("INTERVAL_END_GMT", item)),
+        "value"                   : xml.value("VALUE",              item)
             }
 
 # -----------------------------------------------------------------------------
@@ -81,24 +85,25 @@ def config():
 def run(manifest, config, logging_level=logging.INFO):
     log.configure_logging(logging_level)
     resource_name   = manifest['name']
-    sql_insert      = manifest['sql_insert']
-    ddl_create      = manifest['ddl_create']
+    sql_insert      = " ".join(manifest['sql_insert'])
+    ddl_create      = " ".join(manifest['ddl_create'])
     xml_dir         = config['source_dir']
     db_dir          = config['working_dir']
     state_file      = config['state_file']
     db_name         = "%s.db" % resource_name
     state.update(
-            insert(
+            db.insert(
                 resource_name,
                 db_dir,
                 db_name,
                 ddl_create,
                 sql_insert,
-                parse(
+                xml.parse(
                     resource_name,
-                    new_xml_files(resource_name, state_file, xml_dir)
+                    xml.new_xml_files(resource_name, state_file, xml_dir),
                     xml_dir,
-                    xml2maps)))
+                    xml2maps)),
+            state_file)
 
 # -----------------------------------------------------------------------------
 # Main
