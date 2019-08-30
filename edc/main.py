@@ -12,8 +12,8 @@ import tarfile
 import time
 
 @click.group()
-@click.option('--config-dir', default="~/.config/energy-dashboard", help="config file directory")
-@click.option('--debug/--no-debug', default=False)
+@click.option('--config-dir', default="~/.config/energy-dashboard", help="Config file directory")
+@click.option('--debug/--no-debug', default=False, help="Enable debug logging")
 @click.pass_context
 def cli(ctx, config_dir, debug):
     """
@@ -58,6 +58,9 @@ def license():
 @cli.group()
 @click.pass_context
 def config(ctx):
+    """
+    Manage config file.
+    """
     pass
 
 @config.command('update', short_help="Update config")
@@ -107,7 +110,7 @@ def feeds(ctx):
     """
     pass
 
-@feeds.command('list', short_help='list feeds')
+@feeds.command('list', short_help='List feeds')
 @click.pass_context
 def feeds_list(ctx):
     """
@@ -118,7 +121,7 @@ def feeds_list(ctx):
     for item in items:
         click.echo(item)
 
-@feeds.command('search', short_help='search feeds (NYI)')
+@feeds.command('search', short_help='Search feeds (NYI)')
 def feeds_search():
     pass
 
@@ -132,7 +135,7 @@ def feed():
     """
     pass
 
-@feed.command('create', short_help='create new feed')
+@feed.command('create', short_help='Create new feed')
 @click.argument('name')
 @click.argument('maintainer')
 @click.argument('company')
@@ -207,13 +210,8 @@ def feed_create(ctx, name, maintainer, company, email, url, start_date_tuple):
             f.write(template.render(m))
             if cfg.debug(): click.echo("Rendered '%s'" % target)
 
-    #subprocess.run(['git', 'init'], cwd=new_feed_dir, shell=True)
-    #subprocess.run(['git', 'add', "*"], cwd=new_feed_dir, shell=True)
-    #subprocess.run(['git', 'commit', "-m", "initial commit", "-m", "auto-generated via edc"], cwd=new_feed_dir, shell=True)
 
-
-
-@feed.command('invoke', short_help='invoke a shell command in the feed directory')
+@feed.command('invoke', short_help='Invoke a shell command in the feed directory')
 @click.argument('feed')
 @click.argument('command')
 @click.pass_context
@@ -246,7 +244,7 @@ def feed_invoke(ctx, feed, command):
     subprocess.run([command], cwd=target_dir, shell=True)
 
 
-@feed.command('status', short_help='show feed status')
+@feed.command('status', short_help='Show feed status')
 @click.argument('feed')
 @click.option('--separator', '-s', default=',')
 @click.option('--header/--no-header', default=False)
@@ -270,7 +268,7 @@ def feed_status(ctx, feed, separator, header):
     status.append(str(dbcount(feed, target_dir)))
     click.echo(separator.join(status))
 
-@feed.command('download', short_help='download from source url')
+@feed.command('download', short_help='Download from source url')
 @click.argument('feed')
 @click.pass_context
 def feed_download(ctx, feed):
@@ -279,7 +277,7 @@ def feed_download(ctx, feed):
     """
     click.echo(subprocess.run(["src/10_down.py"], cwd=target_dir, shell=True, capture_output=True).stdout)
 
-@feed.command('reset', short_help='reset feed to reprocess stage')
+@feed.command('reset', short_help='Reset feed to reprocess stage')
 @click.argument('feed')
 @click.option('--stage', '-s', type=click.Choice(['zip', 'xml', 'db']), multiple=True, required=True)
 @click.pass_context
@@ -322,7 +320,7 @@ def feed_archive(ctx, feed, archivedir):
 @click.pass_context
 def feed_process(ctx, feed, stage):
     """
-    Process the feed through it's stages:
+    Process the feed through it's stages, in order:
 
         FEED/src/10_down.py
         FEED/src/20_unzp.py

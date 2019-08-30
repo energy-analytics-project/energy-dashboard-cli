@@ -6,6 +6,8 @@ Still a WIP...
 
 ## Show Help
 
+## edc
+
 ```bash
 Usage: edc [OPTIONS] COMMAND [ARGS]...
 
@@ -14,12 +16,12 @@ Usage: edc [OPTIONS] COMMAND [ARGS]...
   it, and inserts it into a database.
 
 Options:
-  --config-dir TEXT     config file directory
-  --debug / --no-debug
+  --config-dir TEXT     Config file directory
+  --debug / --no-debug  Enable debug logging
   --help                Show this message and exit.
 
 Commands:
-  config
+  config   Manage config file.
   feed     Manage individual 'feed' (singular).
   feeds    Manage the full set of data 'feeds' (plural).
   license  Show the license (GPL v3).
@@ -29,6 +31,8 @@ Commands:
 
 ```bash
 Usage: edc config [OPTIONS] COMMAND [ARGS]...
+
+  Manage config file.
 
 Options:
   --help  Show this message and exit.
@@ -49,9 +53,14 @@ Options:
   --help  Show this message and exit.
 
 Commands:
-  create  create new feed
-  invoke  invoke a shell command in the feed directory
-  status  show feeds status (NYI)
+  archive   Archive feed to tar.gz
+  create    Create new feed
+  download  Download from source url
+  invoke    Invoke a shell command in the feed directory
+  proc      Process a feed through the stages
+  reset     Reset feed to reprocess stage
+  restore   Restore feed from tar.gz
+  status    Show feed status
 ```
 
 ### feeds
@@ -65,8 +74,8 @@ Options:
   --help  Show this message and exit.
 
 Commands:
-  list    list feeds
-  search  search feeds (NYI)
+  list    List feeds
+  search  Search feeds (NYI)
 ```
 
 ### license
@@ -90,6 +99,7 @@ Commands:
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
     
 ```
+
 
 ##Usage
 
