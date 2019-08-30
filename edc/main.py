@@ -210,7 +210,7 @@ def feed_create(ctx, name, maintainer, company, email, url, start_date_tuple):
 
 @feed.command('invoke', short_help='invoke a shell command in the feed directory')
 @click.argument('feed')
-@click.option('--command', '-c', multiple=True)
+@click.argument('command')
 @click.pass_context
 def feed_invoke(ctx, feed, command):
     """
@@ -222,7 +222,7 @@ def feed_invoke(ctx, feed, command):
     Example:
     # print the 'url' of all the feeds with 'atl' in the name
 
-    $ edc feeds list | grep atl | xargs -L 1 -I {} edc feed invoke {} -c "jq .url < manifest.json"
+    $ edc feeds list | grep atl | xargs -L 1 -I {} edc feed invoke {} "jq .url < manifest.json"
     "http://oasis.caiso.com/oasisapi/SingleZip?queryname=ATL_GEN_CAP_LST&startdatetime=_START_T07:00-0000&enddatetime=_END_T07:00-0000&version=4"
     "http://oasis.caiso.com/oasisapi/SingleZip?queryname=ATL_HUB&startdatetime=_START_T07:00-0000&enddatetime=_END_T07:00-0000&version=1"
     "http://oasis.caiso.com/oasisapi/SingleZip?queryname=ATL_OSM&msg_severity=ALL&startdatetime=_START_T07:00-0000&enddatetime=_END_T07:00-0000&version=1"
@@ -230,7 +230,7 @@ def feed_invoke(ctx, feed, command):
     
     Example:
     # dump record count
-    $ edc feeds list | grep mileage | xargs -L 1 -I {} edc feed invoke {} -c "echo {}; sqlite3 db/{}.db 'select count(*) from oasis'"
+    $ edc feeds list | grep mileage | xargs -L 1 -I {} edc feed invoke {} "echo {}; sqlite3 db/{}.db 'select count(*) from oasis'"
     data-oasis-as-mileage-calc-all
     42
     """
@@ -238,7 +238,7 @@ def feed_invoke(ctx, feed, command):
     target_dir = os.path.join(cfg.ed_path(), 'data', feed)
     if not os.path.exists(target_dir):
         raise Exception("Feed does not exist at: %s" % target_dir)
-    subprocess.run(*command, cwd=target_dir, shell=True)
+    subprocess.run([command], cwd=target_dir, shell=True)
 
 
 @feed.command('status', short_help='show feeds status (NYI)')
