@@ -1,13 +1,18 @@
 import click
+import json
+import os
+import json
 
 @click.group()
-def cli():
+@click.option('--config-dir', default="~/.config/energy-dashboard", help="config file directory")
+@click.pass_context
+def cli(ctx, config_dir):
     """
     Command Line Interface for the Energy Dashboard. This tooling 
     collects information from a number of data feeds, imports that data, 
     transforms it, and inserts it into a database.
     """
-    pass
+    ctx.obj = {'config-dir': config_dir}
 
 #------------------------------------------------------------------------------
 # License
@@ -34,6 +39,33 @@ def license():
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
     """)
+
+#------------------------------------------------------------------------------
+# Configure
+#------------------------------------------------------------------------------
+@cli.command()
+@click.argument('path')
+@click.pass_context
+def config(ctx, path):
+    """
+    Configure the CLI
+
+    path : path to the energy dashboard
+    """
+    config_dir = ctx.obj['config-dir']
+    if not os.path.exists(config_dir):
+        os.makedirs(config_dir)
+    cfg_file_path = os.path.join(config_dir, 'energy-dashboard-client.config')
+    if os.path.exists(cfg_file_path):
+        config = load_config(cfg_file_path)
+    else:
+        config = empty_config()
+    # override prev values
+    config.ed_path  = path
+    config.cfg_file = cfg_file_path
+    config.save()
+
+
 
 #------------------------------------------------------------------------------
 # Feeds (plural)
@@ -70,3 +102,27 @@ def feed():
 @feed.command('add', short_help='add new feed (NYI)')
 def feed_add():
     pass
+
+
+#------------------------------------------------------------------------------
+# Config Stuff
+#------------------------------------------------------------------------------
+class Config():
+    def __init__(self, m):
+        self.ed_path    = m['ed_path']
+        self.cfg_file   = m['cfg_file']
+
+    def save(self) -> None:
+        m               = {}
+        m['ed_path']    = self.ed_path
+        m['cfg_file']   = self.cfg_file
+        with open(self.cfg_file, 'w') as outfile:
+            json.dump(m, outfile, indent=4, sort_keys=True)
+
+def empty_config() -> Config:
+    return Config({'ed_path':"", 'cfg_file':""})
+
+def load_config(f:str) -> Config:
+    with open(f, 'r') as json_cfg_file:
+        m = json.load(json_cfg_file)
+        return Config(m)
