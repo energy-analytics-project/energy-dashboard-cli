@@ -8,6 +8,9 @@ Still a WIP...
 
 ## edc
 
+
+## edc
+
 ```bash
 Usage: edc [OPTIONS] COMMAND [ARGS]...
 
@@ -53,14 +56,16 @@ Options:
   --help  Show this message and exit.
 
 Commands:
-  archive   Archive feed to tar.gz
-  create    Create new feed
-  download  Download from source url
-  invoke    Invoke a shell command in the feed directory
-  proc      Process a feed through the stages
-  reset     Reset feed to reprocess stage
-  restore   Restore feed from tar.gz
-  status    Show feed status
+  archive    Archive feed to tar.gz
+  create     Create new feed
+  download   Download from source url
+  invoke     Invoke a shell command in the feed directory
+  proc       Process a feed through the stages
+  reset      Reset feed to reprocess stage
+  restore    Restore feed from tar.gz
+  s3archive  Archive feed to S3 bucket
+  s3restore  Restore feed zip files from from S3 bucket
+  status     Show feed status
 ```
 
 ### feeds
@@ -125,6 +130,11 @@ edc feeds list | grep atl | xargs -L 1 -I {} edc feed status --header {}
 edc feeds list | grep atl | xargs -L 1 -I {} edc feed status --header {}
 edc feeds list | grep mileage | xargs -L 1 -I {} edc feed status --header {}
 edc feeds list | xargs -L 1 -I {} edc feed invoke {} "./src/10_down.py"
+edc feed archive data-oasis-as-mileage-calc-all
+edc feed archive data-oasis-as-mileage-calc-all | xargs -L 1 -I {} tar -tvf {}
+edc feed reset data-oasis-as-mileage-calc-all --stage xml --stage db
+edc feed s3restore data-oasis-as-mileage-calc-all --outdir=temp --service=wasabi
+edc feed s3archive data-oasis-as-mileage-calc-all
 ```
 
 ## Author
