@@ -69,7 +69,7 @@ def config(ctx, path):
         config = empty_config()
         if debug: click.echo("loaded empty config")
     # override prev values
-    config2 = Config(config, {'ed_path': path, 'cfg_file': cfg_file_path})
+    config2 = Config(config, {Config.ED_PATH: path, Config.CFG_FILE: cfg_file_path})
     config2.save()
     if debug: click.echo("saved config to: %s" % config2.cfg_file())
 
@@ -89,9 +89,10 @@ def feeds(ctx):
 @feeds.command('list', short_help='list feeds (NYI)')
 @click.pass_context
 def feeds_list(ctx):
-    cfg = load_config(ctx.obj['config-dir'])
-    items = os.listdir(cfg.ed_path)
-    return items
+    cfg = load_config(os.path.join(os.path.expanduser(ctx.obj['config-dir']), 'energy-dashboard-client.config'))
+    items = os.listdir(os.path.join(cfg.ed_path(), "data"))
+    for item in items:
+        click.echo(item)
 
 @feeds.command('search', short_help='search feeds (NYI)')
 def feeds_search():
@@ -120,18 +121,20 @@ def feed_add():
 # Config Stuff
 #------------------------------------------------------------------------------
 class Config():
+    ED_PATH='ed_path'
+    CFG_FILE='cfg_file'
     def __init__(self, config, m):
         """
         config  : Config instance
         m       : map of overrides
         """
-        self._ed_path    = os.path.expanduser(m['ed_path']  or config.ed_path())
-        self._cfg_file   = os.path.expanduser(m['cfg_file'] or config.cfg_file())
+        self._ed_path    = os.path.expanduser(m[Config.ED_PATH]  or config.ed_path())
+        self._cfg_file   = os.path.expanduser(m[Config.CFG_FILE] or config.cfg_file())
 
     def save(self) -> None:
         m               = {}
-        m['ed_path']    = os.path.expanduser(self._ed_path)
-        m['cfg_file']   = os.path.expanduser(self._cfg_file)
+        m[Config.ED_PATH]   = os.path.expanduser(self._ed_path)
+        m[Config.CFG_FILE]  = os.path.expanduser(self._cfg_file)
         with open(self._cfg_file, 'w') as outfile:
             json.dump(m, outfile, indent=4, sort_keys=True)
 
@@ -142,7 +145,7 @@ class Config():
         return self._cfg_file
 
 def empty_config() -> Config:
-    return Config(None, {'ed_path':"", 'cfg_file':""})
+    return Config(None, {Config.ED_PATH:"", Config.CFG_FILE:""})
 
 def load_config(f:str) -> Config:
     with open(f, 'r') as json_cfg_file:
