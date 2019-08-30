@@ -6,6 +6,8 @@ import subprocess
 import sqlite3
 from jinja2 import Environment, PackageLoader, select_autoescape
 from shutil import make_archive, rmtree
+import tarfile
+import shutil
 
 @click.group()
 @click.option('--config-dir', default="~/.config/energy-dashboard", help="config file directory")
@@ -276,59 +278,78 @@ def feed_download(ctx, feed):
     click.echo(cp.stdout)
     click.echo(cp.stderr)
 
-#@feed.command('reset', short_help='reset feed to reprocess stage')
-#@click.argument('feed')
-#@click.option('--stage', type=click.Choice(['zip', 'xml', 'db'], multiple=True))
-#@click.pass_context
-#def feed_download(ctx, feed, stage):
-#    """
-#    Reset stages. This is a destructive action, but a backup will be made.
-#    """
-#    cfg = Config.from_ctx(ctx)
-#     = os.path.join(cfg.ed_path(), 'data', feed, s)
-#    archive_name = os.path.expanduser(os.path.join('~', 'myarchive'))
-#    root_dir = os.path.expanduser(os.path.join('~', '.ssh'))
-#    make_archive(archive_name, 'gztar', root_dir)
-#'/Users/tarek/myarchive.tar.gz'
-#    for s in stage:
-#        p = os.path.join(cfg.ed_path(), 'data', feed, s)
-#        if click.confirm('About to delete %s. Do you want to continue?'):
-#            shutil.rmtree
-
-
-@feed.command('archive', short_help='archive feed')
+@feed.command('reset', short_help='reset feed to reprocess stage')
 @click.argument('feed')
-@click.option('--outdir', help="Output directory to write archive")
+@click.option('--stage', type=click.Choice(['zip', 'xml', 'db']), multiple=True, required=True)
 @click.pass_context
-def feed_download(ctx, feed, outdir):
+def feed_reset(ctx, feed, stage):
     """
-    Archive a feed. Especially usefull before a destructive action like 
-    resetting the feed state.
+    Reset stages. This is a destructive action, make backups first!.
     """
     cfg = Config.from_ctx(ctx)
-    if outdir is None:
-        outdir = os.path.join(cfg.ed_path(), 'archive')
-    archive_name = os.path.join(outdir, feed)
+    for s in stage:
+        p = os.path.join(cfg.ed_path(), 'data', feed, s)
+        if click.confirm('About to delete %s. Do you want to continue?' % p):
+            shutil.rmtree(p)
+        os.makedirs(p)
+
+@feed.command('archive', short_help='Archive feed to tar.gz')
+@click.argument('feed')
+@click.option('--archivedir', help="Directory to save archive")
+@click.pass_context
+def feed_archive(ctx, feed, archivedir):
+    """
+    Archive a feed. Especially useful before a destructive action like 
+    resetting the feed state.
+    """
+    click.echo(archive_locally(ctx, feed, archivedir))
+
+@feed.command('restore', short_help='Restore feed from tar.gz')
+@click.argument('feed')
+@click.option('--archivedir', help="Directory to read archive")
+@click.pass_context
+def feed_archive(ctx, feed, archivedir):
+    """
+    Restore a feed from a tar.gz. 
+    """
+    click.echo(restore_locally(ctx, feed, archivedir))
+
+#@feed.command('backup', short_help='backup feed to S3 bucket(s)')
+#@click.argument('feed')
+#@click.pass_context
+#def feed_backup(ctx, feed):
+#    """
+#    """
+#    pass
+#
+#@feed.command('restore', short_help='restore feed from S3 bucket(s)')
+#@click.argument('feed')
+#@click.pass_context
+#def feed_restore(ctx, feed):
+#    """
+#    """
+#    pass
+#
+
+def restore_locally(ctx, feed, archivedir):
+    cfg = Config.from_ctx(ctx)
+    if archivedir is None:
+        archivedir = os.path.join(cfg.ed_path(), 'archive')
+    archive_name = os.path.join(archivedir, "%s.tar.gz" % feed)
+    tf = tarfile.open(archive_name)
+    feed_dir = os.path.join(cfg.ed_path(), 'data', feed)
+    if os.path.exists(feed_dir):
+        return "Must delete the target feed dir '%s' before restoring." % feed_dir
+    else:
+        return tf.extractall(os.path.join(cfg.ed_path(), 'data', feed))
+
+def archive_locally(ctx, feed, archivedir):
+    cfg = Config.from_ctx(ctx)
+    if archivedir is None:
+        archivedir = os.path.join(cfg.ed_path(), 'archive')
+    archive_name = os.path.join(archivedir, feed)
     root_dir = os.path.expanduser(os.path.join(cfg.ed_path(), 'data', feed))
-    click.echo(make_archive(archive_name, 'gztar', root_dir))
-
-
-@feed.command('backup', short_help='backup feed to S3 bucket(s)')
-@click.argument('feed')
-@click.pass_context
-def feed_download(ctx, feed):
-    """
-    """
-    pass
-
-@feed.command('restore', short_help='restore feed from S3 bucket(s)')
-@click.argument('feed')
-@click.pass_context
-def feed_download(ctx, feed):
-    """
-    """
-    pass
-
+    return make_archive(archive_name, 'gztar', root_dir)
 
 
 def dbcount(feed):
