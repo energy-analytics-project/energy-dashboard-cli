@@ -2,6 +2,7 @@ import click
 import json
 import os
 import json
+import subprocess
 
 @click.group()
 @click.option('--config-dir', default="~/.config/energy-dashboard", help="config file directory")
@@ -86,20 +87,19 @@ def feeds(ctx):
     """
     pass
 
-@feeds.command('list', short_help='list feeds (NYI)')
+@feeds.command('list', short_help='list feeds')
 @click.pass_context
 def feeds_list(ctx):
-    cfg = load_config(os.path.join(os.path.expanduser(ctx.obj['config-dir']), 'energy-dashboard-client.config'))
+    """
+    List feeds by name. Feeds are implemented as submodules under the energy-dashboard/data directory.
+    """
+    cfg = config_from_ctx(ctx)
     items = os.listdir(os.path.join(cfg.ed_path(), "data"))
     for item in items:
         click.echo(item)
 
 @feeds.command('search', short_help='search feeds (NYI)')
 def feeds_search():
-    pass
-
-@feeds.command('status', short_help='show feeds status (NYI)')
-def feeds_status():
     pass
 
 #------------------------------------------------------------------------------
@@ -114,6 +114,42 @@ def feed():
 
 @feed.command('add', short_help='add new feed (NYI)')
 def feed_add():
+    pass
+
+@feed.command('invoke', short_help='invoke a shell command in the feed directory')
+@click.argument('feed')
+@click.option('--command', '-c', multiple=True)
+@click.pass_context
+def feed_invoke(ctx, feed, command):
+    """
+    CD to feed directory, and invoke command.
+
+    Coupled with the `feeds list` command, the `feed invoke` command allows advanced
+    processing on the feeds in the data directory:
+
+    Example:
+    # print the 'url' of all the feeds with 'atl' in the name
+
+    $ edc feeds list | grep atl | xargs -L 1 -I {} edc feed invoke {} -c "jq .url < manifest.json"
+    "http://oasis.caiso.com/oasisapi/SingleZip?queryname=ATL_GEN_CAP_LST&startdatetime=_START_T07:00-0000&enddatetime=_END_T07:00-0000&version=4"
+    "http://oasis.caiso.com/oasisapi/SingleZip?queryname=ATL_HUB&startdatetime=_START_T07:00-0000&enddatetime=_END_T07:00-0000&version=1"
+    "http://oasis.caiso.com/oasisapi/SingleZip?queryname=ATL_OSM&msg_severity=ALL&startdatetime=_START_T07:00-0000&enddatetime=_END_T07:00-0000&version=1"
+    "http://oasis.caiso.com/oasisapi/SingleZip?queryname=ATL_PEAK_ON_OFF&startdatetime=_START_T07:00-0000&enddatetime=_END_T07:00-0000&version=1"
+    
+    Example:
+    # dump record count
+    $ edc feeds list | grep mileage | xargs -L 1 -I {} edc feed invoke {} -c "echo {}; sqlite3 db/{}.db 'select count(*) from oasis'"
+    data-oasis-as-mileage-calc-all
+    42
+    """
+    cfg = config_from_ctx(ctx)
+    target_dir = os.path.join(cfg.ed_path(), 'data', feed)
+    if not os.path.exists(target_dir):
+        raise Exception("Feed does not exist at: %s" % target_dir)
+    subprocess.run(*command, cwd=target_dir, shell=True)
+
+@feeds.command('status', short_help='show feeds status (NYI)')
+def feeds_status():
     pass
 
 
@@ -151,3 +187,7 @@ def load_config(f:str) -> Config:
     with open(f, 'r') as json_cfg_file:
         m = json.load(json_cfg_file)
         return Config(None, m)
+
+def config_from_ctx(ctx):
+    cfg = load_config(os.path.join(os.path.expanduser(ctx.obj['config-dir']), 'energy-dashboard-client.config'))
+    return cfg
