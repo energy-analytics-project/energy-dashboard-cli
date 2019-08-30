@@ -150,7 +150,8 @@ setup(
     # https://packaging.python.org/en/latest/requirements.html
     install_requires=[
             "energy-dashboard-library",
-            "Click"
+            "Click",
+            "Jinja2"
             ],  # Optional
 
     # To provide executable scripts, use entry points in preference to the
