@@ -5,14 +5,18 @@ import json
 
 @click.group()
 @click.option('--config-dir', default="~/.config/energy-dashboard", help="config file directory")
+@click.option('--debug/--no-debug', default=False)
 @click.pass_context
-def cli(ctx, config_dir):
+def cli(ctx, config_dir, debug):
     """
     Command Line Interface for the Energy Dashboard. This tooling 
     collects information from a number of data feeds, imports that data, 
     transforms it, and inserts it into a database.
     """
-    ctx.obj = {'config-dir': config_dir}
+    ctx.obj = {
+            'config-dir': config_dir,
+            'debug': debug
+            }
 
 #------------------------------------------------------------------------------
 # License
@@ -52,18 +56,22 @@ def config(ctx, path):
 
     path : path to the energy dashboard
     """
-    config_dir = ctx.obj['config-dir']
+    debug = ctx.obj['debug']
+    config_dir = os.path.expanduser(ctx.obj['config-dir'])
     if not os.path.exists(config_dir):
         os.makedirs(config_dir)
+        if debug: click.echo("created config dir: %s" % config_dir)
     cfg_file_path = os.path.join(config_dir, 'energy-dashboard-client.config')
     if os.path.exists(cfg_file_path):
         config = load_config(cfg_file_path)
+        if debug: click.echo("loaded config file: %s" % cfg_file_path)
     else:
         config = empty_config()
+        if debug: click.echo("loaded empty config")
     # override prev values
-    config.ed_path  = path
-    config.cfg_file = cfg_file_path
-    config.save()
+    config2 = Config(config, {'ed_path': path, 'cfg_file': cfg_file_path})
+    config2.save()
+    if debug: click.echo("saved config to: %s" % config2.cfg_file())
 
 
 
@@ -71,15 +79,19 @@ def config(ctx, path):
 # Feeds (plural)
 #------------------------------------------------------------------------------
 @cli.group()
-def feeds():
+@click.pass_context
+def feeds(ctx):
     """
     Manage the full set of data 'feeds' (plural).
     """
     pass
 
 @feeds.command('list', short_help='list feeds (NYI)')
-def feeds_list():
-    pass
+@click.pass_context
+def feeds_list(ctx):
+    cfg = load_config(ctx.obj['config-dir'])
+    items = os.listdir(cfg.ed_path)
+    return items
 
 @feeds.command('search', short_help='search feeds (NYI)')
 def feeds_search():
@@ -108,21 +120,31 @@ def feed_add():
 # Config Stuff
 #------------------------------------------------------------------------------
 class Config():
-    def __init__(self, m):
-        self.ed_path    = m['ed_path']
-        self.cfg_file   = m['cfg_file']
+    def __init__(self, config, m):
+        """
+        config  : Config instance
+        m       : map of overrides
+        """
+        self._ed_path    = os.path.expanduser(m['ed_path']  or config.ed_path())
+        self._cfg_file   = os.path.expanduser(m['cfg_file'] or config.cfg_file())
 
     def save(self) -> None:
         m               = {}
-        m['ed_path']    = self.ed_path
-        m['cfg_file']   = self.cfg_file
-        with open(self.cfg_file, 'w') as outfile:
+        m['ed_path']    = os.path.expanduser(self._ed_path)
+        m['cfg_file']   = os.path.expanduser(self._cfg_file)
+        with open(self._cfg_file, 'w') as outfile:
             json.dump(m, outfile, indent=4, sort_keys=True)
 
+    def ed_path(self):
+        return self._ed_path
+
+    def cfg_file(self):
+        return self._cfg_file
+
 def empty_config() -> Config:
-    return Config({'ed_path':"", 'cfg_file':""})
+    return Config(None, {'ed_path':"", 'cfg_file':""})
 
 def load_config(f:str) -> Config:
     with open(f, 'r') as json_cfg_file:
         m = json.load(json_cfg_file)
-        return Config(m)
+        return Config(None, m)
