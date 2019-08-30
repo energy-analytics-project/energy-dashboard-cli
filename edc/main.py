@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tarfile
 import time
+import requests
 
 @click.group()
 @click.option('--config-dir', default="~/.config/energy-dashboard", help="Config file directory")
@@ -307,7 +308,7 @@ def feed_archive(ctx, feed, archivedir):
 @click.argument('feed')
 @click.option('--archivedir', help="Directory to read archive")
 @click.pass_context
-def feed_archive(ctx, feed, archivedir):
+def feed_restore(ctx, feed, archivedir):
     """
     Restore a feed from a tar.gz. 
     """
@@ -332,21 +333,26 @@ def feed_process(ctx, feed, stage):
 
 
 def process_feed(ctx, feed, stage):
-    filename    = 'edc.log'
     cfg         = Config.from_ctx(ctx)
     feed_dir    = os.path.join(cfg.ed_path(), 'data', feed)
     src_dir     = os.path.join(feed_dir, 'src')
     items       = os.listdir(src_dir)
     srtd_items  = sorted(items)
     for item in srtd_items:
-        with io.open(filename, 'wb') as writer, io.open(filename, 'rb', 1) as reader:
-            process = subprocess.Popen([os.path.join(src_dir, item)], cwd=feed_dir, shell=True, stdout=writer)
-            while process.poll() is None:
-                click.echo(reader.read())
-                time.sleep(0.5)
-            # Read the remaining
-            click.echo(reader.read())
+        cmd = os.path.join(src_dir, item)
+        echo_exec([cmd], feed_dir)
 
+def echo_exec(cmd, cwd):
+    filename    = 'edc.log'
+    click.echo("cmd: %s" % cmd)
+    click.echo("cwd: %s" % cwd)
+    with io.open(filename, 'wb') as writer, io.open(filename, 'rb', 1) as reader:
+        process = subprocess.Popen(cmd, cwd=cwd, shell=True, stdout=writer)
+        while process.poll() is None:
+            click.echo(reader.read())
+            time.sleep(0.5)
+        # Read the remaining
+        click.echo(reader.read())
 
 def restore_locally(ctx, feed, archivedir):
     cfg = Config.from_ctx(ctx)
@@ -369,22 +375,50 @@ def archive_locally(ctx, feed, archivedir):
     return make_archive(archive_name, 'gztar', root_dir)
 
 
-#@feed.command('backup', short_help='backup feed to S3 bucket(s)')
-#@click.argument('feed')
-#@click.pass_context
-#def feed_backup(ctx, feed):
-#    """
-#    """
-#    pass
-#
-#@feed.command('restore', short_help='restore feed from S3 bucket(s)')
-#@click.argument('feed')
-#@click.pass_context
-#def feed_restore(ctx, feed):
-#    """
-#    """
-#    pass
-#
+@feed.command('s3archive', short_help='Archive feed to S3 bucket')
+@click.argument('feed')
+@click.option('--service', '-s', type=click.Choice(['wasabi', 'digitalocean',]), default='wasabi')
+@click.pass_context
+def feed_s3archive(ctx, feed, service):
+    """
+    Archive feed to an S3 bucket.
+    """
+    cfg         = Config.from_ctx(ctx)
+    feed_dir    = os.path.join(cfg.ed_path(), 'data', feed)
+    s3_dir      = os.path.join('eap', 'energy-dashboard', 'data', feed)
+    cmd         = "rclone copy --verbose --include=\"zip/*.zip\" --include=\"db/*.db\" %s %s:%s" % (feed_dir, service, s3_dir)
+    echo_exec([cmd], feed_dir)
+
+@feed.command('s3restore', short_help='Restore feed zip files from from S3 bucket')
+@click.argument('feed')
+@click.option('--service', '-s', type=click.Choice(['wasabi', 'digitalocean',]), default='wasabi')
+@click.option('--outdir', '-o', help="Output directory to download zip files to")
+@click.pass_context
+def feed_s3restore(ctx, feed, service, outdir):
+    """
+    Copy S3 bucket zip files to feed dir.
+    """
+    endpoints = {
+            'digitalocean'  : 'sfo2.digitaloceanspaces.com',
+            'wasabi'        : 's3.us-west-1.wasabisys.com'
+    }
+
+    cfg         = Config.from_ctx(ctx)
+    feed_dir    = os.path.join(cfg.ed_path(), 'data', feed)
+    if outdir is None:
+        outdir = os.path.join(feed_dir, 'zip')
+    s3_dir      = os.path.join('eap', 'energy-dashboard', 'data', feed)
+    with open(os.path.join(feed_dir, 'xml', 'unzipped.txt'), 'r') as zipfiles:
+        for zf in zipfiles:
+            zf = zf.rstrip()
+            s3_file = "%s/zip/%s" % (s3_dir, zf)
+            url = "https://%s/%s/zip/%s" % (endpoints[service], s3_dir, zf)
+            click.echo("downloading : %s" % url)
+            r = requests.get(url)
+            if r.status_code == 200:
+                with open(os.path.join(outdir, zf), 'wb') as fd:
+                    for chunk in r.iter_content(chunk_size=128):
+                        fd.write(chunk)
 
 def dbcount(feed, feed_dir):
     try:
