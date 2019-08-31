@@ -137,5 +137,19 @@ edc feed s3restore data-oasis-as-mileage-calc-all --outdir=temp --service=wasabi
 edc feed s3archive data-oasis-as-mileage-calc-all
 ```
 
+### Onboarding
+
+Some quick notes on how I onboarded 'data-oasis-as-mileage-calc-all':
+
+```bash
+edc feed proc data-oasis-as-mileage-calc-all
+edc feed s3archive data-oasis-as-mileage-calc-all --service wasabi
+edc feed s3archive data-oasis-as-mileage-calc-all --service digitalocean
+edc feed status data-oasis-as-mileage-calc-all --header
+edc feed invoke data-oasis-as-mileage-calc-all "git st"
+edc feed invoke data-oasis-as-mileage-calc-all "git log"
+edc feed invoke data-oasis-as-mileage-calc-all "git show HEAD"
+```
+
 ## Author
 Todd Greenwood-Geer (Enviro Software Solutions, LLC)
