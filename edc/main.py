@@ -195,7 +195,6 @@ def feed_create(ctx, name, maintainer, company, email, url, start_date_tuple):
             'DATA_URL'  : url,
             'REPO_URL'  : "https://github.com/energy-analytics-project/%s" % name,
             'START'     : start_date_tuple,
-            'PK_EXCLUSION'     : ['value']
     }
     for tf in template_files:
         template    = env.get_template(tf)
@@ -448,7 +447,7 @@ def feed_db_ddl(ctx, feed, xmlfile, save):
     with open(manifest, 'r') as f:
         obj = json.loads(f.read())
     if debug: click.echo(json.dumps(obj, indent=4, sort_keys=True))
-    pk_exc = obj.pop('PK_EXCLUSION', ['value'])
+    pk_exc = obj.pop('pk_exclusion', ['value'])
     if xmlfile is None:
         xml_files   = list(fs.glob_dir(xml_dir, ".xml"))
         if debug: click.echo("found %d xml files in %s" % (len(xml_files), xml_dir))
