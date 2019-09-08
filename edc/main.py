@@ -420,6 +420,52 @@ def feed_s3restore(ctx, feed, service, outdir):
                     for chunk in r.iter_content(chunk_size=128):
                         fd.write(chunk)
 
+#------------------------------------------------------------------------------
+# Feed.Manifest (singular)
+#------------------------------------------------------------------------------
+@feed.group()
+def manifest():
+    """
+    Manage a feed's manifest.
+    """
+    pass
+
+@manifest.command('show', short_help='Display the feed manifest')
+@click.argument('feed')
+@click.pass_context
+def feed_manifest_show(ctx, feed):
+    """
+    Display the feed manifest.
+    """
+    cfg         = Config.from_ctx(ctx)
+    feed_dir    = os.path.join(cfg.ed_path(), 'data', feed)
+    manifest    = os.path.join(feed_dir, 'manifest.json')
+    with open(manifest, 'r') as f:
+        for line in f:
+            click.echo(line.rstrip())
+
+@manifest.command('update', short_help='Update the feed manifest')
+@click.argument('feed')
+@click.option('--field', '-f', help="Field to update")
+@click.option('--value', help="Value to update item to")
+@click.pass_context
+def feed_manifest_show(ctx, feed, field, value):
+    """
+    Update the manifest.field with the value provided.
+    """
+    cfg         = Config.from_ctx(ctx)
+    feed_dir    = os.path.join(cfg.ed_path(), 'data', feed)
+    manifest    = os.path.join(feed_dir, 'manifest.json')
+    with open(manifest, 'r') as f:
+        obj = json.loads(f.read())
+    if value == "":
+        obj.pop(field, None)
+    else:
+        obj[field] = value
+    with open(manifest, 'w') as f:
+        f.write(json.dumps(obj, indent=4, sort_keys=True))
+
+
 def dbcount(feed, feed_dir):
     try:
         cnx = sqlite3.connect(os.path.join(feed_dir, "db", "%s.db" % feed))
