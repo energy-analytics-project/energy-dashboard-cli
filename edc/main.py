@@ -11,6 +11,9 @@ import sys
 import tarfile
 import time
 import requests
+from edl.resources import xmlparser
+from edl.resources import filesystem as fs
+import pdb
 
 @click.group()
 @click.option('--config-dir', default="~/.config/energy-dashboard", help="Config file directory")
@@ -191,7 +194,8 @@ def feed_create(ctx, name, maintainer, company, email, url, start_date_tuple):
             'EMAIL'     : email,
             'DATA_URL'  : url,
             'REPO_URL'  : "https://github.com/energy-analytics-project/%s" % name,
-            'START'     : start_date_tuple
+            'START'     : start_date_tuple,
+            'PK_EXCLUSION'     : ['value']
     }
     for tf in template_files:
         template    = env.get_template(tf)
@@ -424,6 +428,51 @@ def feed_s3restore(ctx, feed, service, outdir):
 # Feed.Manifest (singular)
 #------------------------------------------------------------------------------
 @feed.group()
+def db():
+    """
+    Manage a feed's database.
+    """
+    pass
+
+@db.command('ddl')
+@click.argument('feed')
+@click.option("--xmlfile", "-x", help="File to scan")
+@click.option("--save/--no-save", default=False, help="Save ddl to manifest")
+@click.pass_context
+def feed_db_ddl(ctx, feed, xmlfile, save):
+    cfg         = Config.from_ctx(ctx)
+    debug       = ctx.obj['debug']
+    feed_dir    = os.path.join(cfg.ed_path(), 'data', feed)
+    xml_dir     = os.path.join(feed_dir, 'xml')
+    manifest    = os.path.join(feed_dir, 'manifest.json')
+    with open(manifest, 'r') as f:
+        obj = json.loads(f.read())
+    if debug: click.echo(json.dumps(obj, indent=4, sort_keys=True))
+    pk_exc = obj.pop('PK_EXCLUSION', ['value'])
+    if xmlfile is None:
+        xml_files   = list(fs.glob_dir(xml_dir, ".xml"))
+        if debug: click.echo("found %d xml files in %s" % (len(xml_files), xml_dir))
+        if len(xml_files) < 1:
+            sys.stderr.write("ERROR: no xml files found in %s" % xml_dir)
+            return
+        xmlfile    = xml_files[-1]
+    if not xmlfile.startswith(xml_dir):
+        xmlfile = os.path.join(xml_dir, xmlfile)
+    if debug: click.echo("scanning file: %s" % xmlfile)
+    with open(xmlfile, 'r') as f:
+        xst = xmlparser.XML2SQLTransormer(f).parse().scan_types().scan_tables(pk_exc)
+        new_ddl = list(xst.ddl())
+        for d in new_ddl:
+            click.echo(d)
+    if save:
+        obj['ddl_create'] = new_ddl
+        with open(manifest, 'w') as f:
+            f.write(json.dumps(obj, indent=4, sort_keys=True))
+
+#------------------------------------------------------------------------------
+# Feed.Manifest (singular)
+#------------------------------------------------------------------------------
+@feed.group()
 def manifest():
     """
     Manage a feed's manifest.
@@ -464,6 +513,7 @@ def feed_manifest_show(ctx, feed, field, value):
         obj[field] = value
     with open(manifest, 'w') as f:
         f.write(json.dumps(obj, indent=4, sort_keys=True))
+
 
 
 def dbcount(feed, feed_dir):
