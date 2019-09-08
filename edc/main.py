@@ -433,12 +433,15 @@ def db():
     """
     pass
 
-@db.command('ddl')
+@db.command('createddl')
 @click.argument('feed')
 @click.option("--xmlfile", "-x", help="File to scan")
 @click.option("--save/--no-save", default=False, help="Save ddl to manifest")
 @click.pass_context
-def feed_db_ddl(ctx, feed, xmlfile, save):
+def feed_db_create_ddl(ctx, feed, xmlfile, save):
+    """
+    Generate SQL DDL for table creation.
+    """
     cfg         = Config.from_ctx(ctx)
     debug       = ctx.obj['debug']
     feed_dir    = os.path.join(cfg.ed_path(), 'data', feed)
@@ -465,6 +468,43 @@ def feed_db_ddl(ctx, feed, xmlfile, save):
             click.echo(d)
     if save:
         obj['ddl_create'] = new_ddl
+        with open(manifest, 'w') as f:
+            f.write(json.dumps(obj, indent=4, sort_keys=True))
+
+@db.command('insertsql')
+@click.argument('feed')
+@click.option("--xmlfile", "-x", help="File to scan" required=True)
+@click.pass_context
+def feed_db_ddl(ctx, feed, xmlfile, save):
+    """
+    Generate SQL for data insertion into table.
+    """
+    cfg         = Config.from_ctx(ctx)
+    debug       = ctx.obj['debug']
+    feed_dir    = os.path.join(cfg.ed_path(), 'data', feed)
+    xml_dir     = os.path.join(feed_dir, 'xml')
+    manifest    = os.path.join(feed_dir, 'manifest.json')
+    with open(manifest, 'r') as f:
+        obj = json.loads(f.read())
+    if debug: click.echo(json.dumps(obj, indent=4, sort_keys=True))
+    pk_exc = obj.pop('pk_exclusion', ['value'])
+    if xmlfile is None:
+        xml_files   = list(fs.glob_dir(xml_dir, ".xml"))
+        if debug: click.echo("found %d xml files in %s" % (len(xml_files), xml_dir))
+        if len(xml_files) < 1:
+            sys.stderr.write("ERROR: no xml files found in %s" % xml_dir)
+            return
+        xmlfile    = xml_files[-1]
+    if not xmlfile.startswith(xml_dir):
+        xmlfile = os.path.join(xml_dir, xmlfile)
+    if debug: click.echo("scanning file: %s" % xmlfile)
+    with open(xmlfile, 'r') as f:
+        xst = xmlparser.XML2SQLTransormer(f).parse().scan_types().scan_tables(pk_exc)
+        new_ddl = list(xst.ddl())
+        for d in new_ddl:
+            click.echo(d)
+    if save:
+        obj['sql_insert'] = new_ddl
         with open(manifest, 'w') as f:
             f.write(json.dumps(obj, indent=4, sort_keys=True))
 

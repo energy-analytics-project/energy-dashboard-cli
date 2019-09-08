@@ -17,46 +17,6 @@ from edl.resources import db
 from edl.resources import xml
 
 # -----------------------------------------------------------------------------
-# Custom Glue Code
-# -----------------------------------------------------------------------------
-def xml2maps(xml_file):
-    """Return a list of maps constructed from the xml file"""
-    dom     = md.parse(xml_file)
-    header  = xml.get_element("MessageHeader",  dom)
-    payload = xml.get_element("MessagePayload", dom)
-    rto     = xml.get_element("RTO",            payload)
-    name    = xml.get_element("name",           rto)
-    items   = xml.get_elements("REPORT_ITEM",    rto)
-    return [xml2map(header, name, item) for item in items] 
-
-def xml2map(header, name, item):
-    """Return map"""
-    return {
-        "timedate"                : xml.value("TimeDate",           header),
-        "timedate_posix"          : xml.posix(xml.value("TimeDate",     header)),
-        "source"                  : xml.value("Source",             header),
-        "version"                 : xml.value("Version",            header),
-        "name"                    : xml.value_of(name),
-        "system"                  : xml.value("SYSTEM",             item),
-        "tz"                      : xml.value("TZ",                 item),
-        "report"                  : xml.value("REPORT",             item),
-        "mkt_type"                : xml.value("MKT_TYPE",           item),
-        "uom"                     : xml.value("UOM",                item),
-        "interval"                : xml.value("INTERVAL",           item),
-        "sec_per_interval"        : xml.value("SEC_PER_INTERVAL",   item),
-        "data_item"               : xml.value("DATA_ITEM",          item),
-        "resource_name"           : xml.value("RESOURCE_NAME",      item),
-        "opr_date"                : xml.value("OPR_DATE",           item),
-        "opr_date_8601"           : xml.date_8601(xml.value("OPR_DATE", item)),
-        "interval_num"            : xml.value("INTERVAL_NUM",       item),
-        "interval_start_gmt"      : xml.value("INTERVAL_START_GMT", item),
-        "interval_start_posix"    : xml.posix(xml.value("INTERVAL_START_GMT", item)),
-        "interval_end_gmt"        : xml.value("INTERVAL_END_GMT",   item),
-        "interval_end_posix"      : xml.posix(xml.value("INTERVAL_END_GMT", item)),
-        "value"                   : xml.value("VALUE",              item)
-            }
-
-# -----------------------------------------------------------------------------
 # Config
 # -----------------------------------------------------------------------------
 def config():
