@@ -245,7 +245,7 @@ def feed_invoke(ctx, feed, command):
     target_dir = os.path.join(cfg.ed_path(), 'data', feed)
     if not os.path.exists(target_dir):
         raise Exception("Feed does not exist at: %s" % target_dir)
-    subprocess.run([command], cwd=target_dir, shell=True)
+    echo_exec([command], target_dir)
 
 
 @feed.command('status', short_help='Show feed status')
@@ -272,26 +272,19 @@ def feed_status(ctx, feed, separator, header):
     status.append(str(dbcount(feed, target_dir)))
     click.echo(separator.join(status))
 
-@feed.command('download', short_help='Download from source url')
-@click.argument('feed')
-@click.pass_context
-def feed_download(ctx, feed):
-    """
-    Download feed
-    """
-    click.echo(subprocess.run(["src/10_down.py"], cwd=target_dir, shell=True, capture_output=True).stdout)
-
 @feed.command('reset', short_help='Reset feed to reprocess stage')
 @click.argument('feed')
-@click.option('--stage', '-s', type=click.Choice(['zip', 'xml', 'db']), multiple=True, required=True)
+@click.option('--stage', '-s', type=click.Choice(['download', 'unzip', 'parse', 'insert']), multiple=True, required=True)
 @click.pass_context
 def feed_reset(ctx, feed, stage):
     """
-    Reset stages. This is a destructive action, make backups first!.
+    Reset stage(s). This is a destructive action, make backups first!.
     """
+    stage_dir = {'download' : 'zip', 'unzip' : 'xml', 'parse': 'sql', 'insert':'db'}
+
     cfg = Config.from_ctx(ctx)
     for s in stage:
-        p = os.path.join(cfg.ed_path(), 'data', feed, s)
+        p = os.path.join(cfg.ed_path(), 'data', feed, stage_dir[s])
         if click.confirm('About to delete %s. Do you want to continue?' % p):
             shutil.rmtree(p)
         os.makedirs(p)
@@ -343,19 +336,20 @@ def process_feed(ctx, feed, stage):
     srtd_items  = sorted(items)
     for item in srtd_items:
         cmd = os.path.join(src_dir, item)
-        echo_exec([cmd], feed_dir)
+        echo_exec(cmd, feed_dir)
 
 def echo_exec(cmd, cwd):
+    click.echo("# %s$ %s" % (cwd,cmd))
     filename    = 'edc.log'
-    click.echo("cmd: %s" % cmd)
-    click.echo("cwd: %s" % cwd)
     with io.open(filename, 'wb') as writer, io.open(filename, 'rb', 1) as reader:
         process = subprocess.Popen(cmd, cwd=cwd, shell=True, stdout=writer)
         while process.poll() is None:
-            click.echo(reader.read())
-            time.sleep(0.5)
-        # Read the remaining
+            data = reader.read()
+            if len(data) > 0 and data != "\n":
+                click.echo(reader.read())
+            time.sleep(0.1)
         click.echo(reader.read())
+
 
 def restore_locally(ctx, feed, archivedir):
     cfg = Config.from_ctx(ctx)
@@ -424,6 +418,72 @@ def feed_s3restore(ctx, feed, service, outdir):
                         fd.write(chunk)
 
 #------------------------------------------------------------------------------
+# Feed.Stage
+#------------------------------------------------------------------------------
+@feed.group()
+def stage():
+    """
+    Manage the feed stages
+    """
+    pass
+
+@stage.command('download', short_help='10_down.py')
+@click.argument('feed')
+@click.pass_context
+def feed_stage_download(ctx, feed):
+    """
+    Download feed from canonical origin
+    """
+    cfg         = Config.from_ctx(ctx)
+    feed_dir    = os.path.join(cfg.ed_path(), 'data', feed)
+    echo_exec(["src/10_down.py"], feed_dir)
+
+@stage.command('unzip', short_help='20_unzp.py')
+@click.argument('feed')
+@click.pass_context
+def feed_stage_unzip(ctx, feed):
+    """
+    Unzip downloaded zip files
+    """
+    cfg         = Config.from_ctx(ctx)
+    feed_dir    = os.path.join(cfg.ed_path(), 'data', feed)
+    echo_exec("src/20_unzp.py", feed_dir)
+
+@stage.command('parse', short_help='30_pars.py')
+@click.argument('feed')
+@click.pass_context
+def feed_stage_parse(ctx, feed):
+    """
+    Parse xml files
+    """
+    cfg         = Config.from_ctx(ctx)
+    feed_dir    = os.path.join(cfg.ed_path(), 'data', feed)
+    echo_exec("src/30_pars.py", feed_dir)
+
+@stage.command('insert', short_help='40_inse.py')
+@click.argument('feed')
+@click.pass_context
+def feed_stage_insert(ctx, feed):
+    """
+    Insert sql files into database
+    """
+    cfg         = Config.from_ctx(ctx)
+    feed_dir    = os.path.join(cfg.ed_path(), 'data', feed)
+    echo_exec("src/40_inse.py", feed_dir)
+
+@stage.command('save', short_help='50_save.sh')
+@click.argument('feed')
+@click.pass_context
+def feed_stage_save(ctx, feed):
+    """
+    Save feed state
+    """
+    cfg         = Config.from_ctx(ctx)
+    feed_dir    = os.path.join(cfg.ed_path(), 'data', feed)
+    echo_exec("src/50_save.sh", feed_dir)
+
+
+#------------------------------------------------------------------------------
 # Feed.Manifest (singular)
 #------------------------------------------------------------------------------
 @feed.group()
@@ -473,7 +533,7 @@ def feed_db_create_ddl(ctx, feed, xmlfile, save):
 
 @db.command('insertsql')
 @click.argument('feed')
-@click.option("--xmlfile", "-x", help="File to scan" required=True)
+@click.option("--xmlfile", "-x", help="File to scan", required=True)
 @click.pass_context
 def feed_db_ddl(ctx, feed, xmlfile, save):
     """

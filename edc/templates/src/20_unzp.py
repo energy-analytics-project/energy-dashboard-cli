@@ -8,8 +8,10 @@
 import os
 import zipfile as zf
 import logging
-import log
+import json
 from edl.resources import state
+from edl.resources import log
+from edl.resources import zp
 
 # -----------------------------------------------------------------------------
 # Config
@@ -44,10 +46,11 @@ def run(manifest, config, logging_level=logging.INFO):
     xml_dir         = config['working_dir']
     zip_dir         = config['source_dir']
     state_file      = config['state_file']
+    new_files = state.new_files(resource_name, state_file, zip_dir, '.zip')
     state.update(
-            unzip(
+            zp.unzip(
                 resource_name,
-                new_zip_files(),
+                new_files,
                 zip_dir,
                 xml_dir),
             state_file)

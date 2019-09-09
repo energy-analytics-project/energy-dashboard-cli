@@ -42,12 +42,13 @@ def run(manifest, config, logging_level=logging.INFO):
     log.configure_logging(logging_level)
     resource_name   = manifest['name']
     pk_exclusions   = manifest.pop('pk_exclusions', ['value'])
+    xml_namespace   = manifest['xml_namespace']
     xml_dir         = config['source_dir']
     sql_dir         = config['working_dir']
     state_file      = config['state_file']
     new_files = state.new_files(resource_name, state_file, xml_dir, '.xml')
     state.update(
-            xmlparser.parse(resource_name, new_files, xml_dir, sql_dir, pk_exclusions), 
+            xmlparser.parse(resource_name, new_files, xml_dir, sql_dir, pk_exclusions, xml_namespace), 
             state_file)
 
 # -----------------------------------------------------------------------------
