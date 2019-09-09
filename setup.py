@@ -151,7 +151,6 @@ setup(
     install_requires=[
             "energy-dashboard-library",
             "Click",
-            "Jinja2"
             ],  # Optional
 
     # To provide executable scripts, use entry points in preference to the

@@ -1,33 +1,61 @@
-from jinja2 import Environment, PackageLoader, select_autoescape
-from shutil import make_archive, rmtree
+from edl.cli import feed as clifeed
+from edl.cli import feeds as clifeeds
+from edl.resources.exec import runyield
+from edl.resources import filesystem as fs
+from edl.resources import xmlparser
+from edl.resources import log
 import click
 import io
 import json
 import os
+import pdb
+import requests
 import shutil
 import sqlite3
 import subprocess
 import sys
-import tarfile
 import time
-import requests
-from edl.resources import xmlparser
-from edl.resources import filesystem as fs
-import pdb
+import logging
+
+# CTX OBJ KEYS
+EDDIR           ='eddir'
+LOGGER          ='logger'
+FEED            ='feed'
 
 @click.group()
-@click.option('--config-dir', default="~/.config/energy-dashboard", help="Config file directory")
-@click.option('--debug/--no-debug', default=False, help="Enable debug logging")
+@click.option('--ed-dir', help="Energy Dashboard directory (defaults to cwd)")
+@click.option('--log-level', type=click.Choice(log.LOG_LEVELS), default="INFO")
 @click.pass_context
-def cli(ctx, config_dir, debug):
+def cli(ctx,  ed_dir, log_level):
     """
     Command Line Interface for the Energy Dashboard. This tooling 
     collects information from a number of data feeds, imports that data, 
     transforms it, and inserts it into a database.
     """
+    # pass this logger as a child logger to the edl methods
+    log.configure_logging()
+    logger = logging.getLogger(__name__)
+    logger.setLevel(log_level)
+    log.debug(logger, {
+        "name"      : __name__,
+        "method"    : "cli",
+        "ed_dir"    : ed_dir,
+        "log_level" : "%s" % log_level})
+
+    if ed_dir is None:
+        ed_dir = os.path.curdir
+    else:
+        if not os.path.exists(ed_dir):
+            log.critical(logger, {
+                "name"      : __name__,
+                "method"    : "cli",
+                "ed_dir"    : ed_dir,
+                "CRITICAL"  : "ed_dir does not exist"
+                })
+    eddir = os.path.abspath(os.path.expanduser(ed_dir))
     ctx.obj = {
-            'config-dir': config_dir,
-            'debug': debug
+            LOGGER          : logger,
+            EDDIR           : eddir
             }
 
 #------------------------------------------------------------------------------
@@ -38,7 +66,7 @@ def license():
     """
     Show the license (GPL v3).
     """
-    print("""    
+    click.echo("""    
     edc : Energy Dashboard Command Line Interface
     Copyright (C) 2019  Todd Greenwood-Geer (Enviro Software Solutions, LLC)
 
@@ -57,53 +85,6 @@ def license():
     """)
 
 #------------------------------------------------------------------------------
-# Configure
-#------------------------------------------------------------------------------
-@cli.group()
-@click.pass_context
-def config(ctx):
-    """
-    Manage config file.
-    """
-    pass
-
-@config.command('update', short_help="Update config")
-@click.option('--path',                 '-p',   help="Path to Energy Dashboard, e.g. ~/repos/energy-dashboard")
-@click.option('--verbose/--no-verbose',         help="Enable/disable debug logging", default=False)
-@click.pass_context
-def config_update(ctx, path, verbose):
-    """
-    Configure the CLI
-
-    path : path to the energy dashboard
-    """
-    debug = ctx.obj['debug']
-    config_dir = os.path.expanduser(ctx.obj['config-dir'])
-    if not os.path.exists(config_dir):
-        os.makedirs(config_dir)
-        if debug: click.echo("created config dir: %s" % config_dir)
-    cfg_file_path = os.path.join(config_dir, 'energy-dashboard-client.config')
-    if os.path.exists(cfg_file_path):
-        config = Config.load(cfg_file_path)
-        if debug: click.echo("loaded config file: %s" % cfg_file_path)
-    else:
-        config = Config()
-        if debug: click.echo("loaded empty config")
-    # override prev values
-    config._debug   = verbose
-    config._ed_path = path
-    config.save()
-
-@config.command('show')
-@click.pass_context
-def config_show(ctx):
-    """
-    Show the config
-    """
-    cfg = Config.from_ctx(ctx)
-    click.echo(cfg)
-
-#------------------------------------------------------------------------------
 # Feeds (plural)
 #------------------------------------------------------------------------------
 @cli.group()
@@ -120,42 +101,54 @@ def feeds_list(ctx):
     """
     List feeds by name. Feeds are implemented as submodules under the energy-dashboard/data directory.
     """
-    cfg = Config.from_ctx(ctx)
-    items = os.listdir(os.path.join(cfg.ed_path(), "data"))
-    for item in items:
+    logger  = ctx.obj[LOGGER]
+    path = ctx.obj[EDDIR]
+    for item in clifeeds.list(logger, path):
         click.echo(item)
 
 @feeds.command('search', short_help='Search feeds (NYI)')
 def feeds_search():
+    """
+    NYI -- implement a full text search against the feed's manifest.json
+    """
     pass
 
 #------------------------------------------------------------------------------
 # Feed (singular)
 #------------------------------------------------------------------------------
 @cli.group()
-def feed():
+@click.argument('feed')
+@click.pass_context
+def feed(ctx, feed):
     """
     Manage individual 'feed' (singular).
     """
-    pass
+    ctx.obj[FEED] = feed
+
+@feed.command('dir', short_help='Feed directory')
+@click.pass_context
+def feed_dir(ctx):
+    feed    = ctx.obj[FEED]
+    path    = ctx.obj[EDDIR]
+    logger  = ctx.obj[LOGGER]
+    click.echo(os.path.join(path, "data", feed))
 
 @feed.command('create', short_help='Create new feed')
-@click.argument('name')
-@click.argument('maintainer')
-@click.argument('company')
-@click.argument('email')
-@click.argument('url')
-@click.option('--start-date-tuple', '-sdt', 
-        help="Start date for the data feed (YYYY,MM, DD), e.g. (2013, 1,1)", 
-        default=(2013,1,1))
+@click.option('--maintainer',   default="Sarah Connor")
+@click.option('--company',      default="robots.com")
+@click.option('--email',        default="sc@robots.com")
+@click.option('--url',          default="http://datafeeds.robots.com/feed01")
+@click.option('--start-date-year', '-sdy',  help="Start date year, e.g. 2013", default=2019, type=int)
+@click.option('--start-date-month', '-sdm', help="Start date month, e.g. 12", default=1, type=int)
+@click.option('--start-date-day', '-sdd',   help="Start date day, e.g. 1", default=1, type=int)
+@click.option('--delay',          default=5, help="Delay between downloads", type=int)
 @click.pass_context
-def feed_create(ctx, name, maintainer, company, email, url, start_date_tuple):
+def feed_create(ctx, maintainer, company, email, url, start_date_year, start_date_month, start_date_day, delay):
     """
     Create a new data feed from a template.
-
+ 
     Arguments:
-
-        name        : name of the data feed, lowerase, with dashes and no special chars
+        feed        : name of the feed (lower case alpha-numeric with dashes)
         maintainer  : name of the feed curator
         company     : name of the company or organization the owner belongs to
         url         : data feed url, with replacement strings in url (see below)
@@ -178,48 +171,20 @@ def feed_create(ctx, name, maintainer, company, email, url, start_date_tuple):
 
             "url": "http://oasis.caiso.com/oasisapi/SingleZip?queryname=AS_MILEAGE_CALC&anc_type=ALL&startdatetime=_START_T07:00-0000&enddatetime=_END_T07:00-0000&version=1",
     """
-    cfg = Config.from_ctx(ctx)
-    new_feed_dir = os.path.join(cfg.ed_path(), 'data', name)
-    os.mkdir(new_feed_dir)
-    if cfg.debug(): click.echo("Created directory: %s" % new_feed_dir)
-    template_files = ["LICENSE","Makefile","README.md","src/10_down.py","src/20_unzp.py","src/30_inse.py","src/40_save.sh","manifest.json"]
-    env = Environment(
-        loader=PackageLoader('edc', 'templates'),
-        autoescape=select_autoescape(['py'])
-    )
-    m = {
-            'NAME'      : name,
-            'MAINTAINER': maintainer,
-            'COMPANY'   : company,
-            'EMAIL'     : email,
-            'DATA_URL'  : url,
-            'REPO_URL'  : "https://github.com/energy-analytics-project/%s" % name,
-            'START'     : start_date_tuple,
-    }
-    for tf in template_files:
-        template    = env.get_template(tf)
-        target      = os.path.join(new_feed_dir, tf)
-        path        = os.path.dirname(target)
-        if not os.path.exists(path):
-            os.makedirs(path)
-        with open(target, 'w') as f:
-            f.write(template.render(m))
-            if cfg.debug(): click.echo("Rendered '%s'" % target)
-
-    hidden_files = ['gitignore', 'gitattributes']
-    for hf in hidden_files:
-        template    = env.get_template(hf)
-        target      = os.path.join(new_feed_dir, ".%s" % hf)
-        with open(target, 'w') as f:
-            f.write(template.render(m))
-            if cfg.debug(): click.echo("Rendered '%s'" % target)
+    feed    = ctx.obj[FEED]
+    path    = ctx.obj[EDDIR]
+    logger  = ctx.obj[LOGGER]
+    click.echo(clifeed.create(
+        logger, path, feed, maintainer, 
+        company, email, url, 
+        [start_date_year, start_date_month, start_date_day], 
+        delay))
 
 
 @feed.command('invoke', short_help='Invoke a shell command in the feed directory')
-@click.argument('feed')
 @click.argument('command')
 @click.pass_context
-def feed_invoke(ctx, feed, command):
+def feed_invoke(ctx, command):
     """
     CD to feed directory, and invoke command.
 
@@ -241,247 +206,162 @@ def feed_invoke(ctx, feed, command):
     data-oasis-as-mileage-calc-all
     42
     """
-    cfg = Config.from_ctx(ctx)
-    target_dir = os.path.join(cfg.ed_path(), 'data', feed)
-    if not os.path.exists(target_dir):
-        raise Exception("Feed does not exist at: %s" % target_dir)
-    echo_exec([command], target_dir)
+    feed    = ctx.obj[FEED]
+    path    = ctx.obj[EDDIR]
+    logger  = ctx.obj[LOGGER]
+    for output in clifeed.invoke(logger, feed, path, command):
+        click.echo(output)
 
 
 @feed.command('status', short_help='Show feed status')
-@click.argument('feed')
 @click.option('--separator', '-s', default=',')
-@click.option('--header/--no-header', default=False)
+@click.option('--header/--no-header', default=True)
 @click.pass_context
-def feed_status(ctx, feed, separator, header):
+def feed_status(ctx, separator, header):
     """
     Return the feed status as:
 
         "feed name","download count","unzipped count","inserted count", "db count"
     """
-    cfg = Config.from_ctx(ctx)
-    target_dir = os.path.join(cfg.ed_path(), 'data', feed)
-    if not os.path.exists(target_dir):
-        raise Exception("Feed does not exist at: %s" % target_dir)
-    if header:
-        click.echo(separator.join(["feed name","download count","unzipped count","inserted count", "db count"]))
-    txtfiles = ["zip/downloaded.txt", "xml/unzipped.txt", "db/inserted.txt"]
-    counts = [str(lines(os.path.join(target_dir, f))) for f in txtfiles]
-    status = [feed]
-    status.extend(counts)
-    status.append(str(dbcount(feed, target_dir)))
-    click.echo(separator.join(status))
+    feed    = ctx.obj[FEED]
+    path    = ctx.obj[EDDIR]
+    logger  = ctx.obj[LOGGER]
+    for line in clifeed.status(logger, feed, path, separator, header):
+        click.echo(line)
 
-@feed.command('reset', short_help='Reset feed to reprocess stage')
-@click.argument('feed')
-@click.option('--stage', '-s', type=click.Choice(['download', 'unzip', 'parse', 'insert']), multiple=True, required=True)
+@feed.command('reset', short_help='Reset feed stage')
+@click.argument('stage')
+@click.option('--confirm/--no-confirm', default=True)
 @click.pass_context
-def feed_reset(ctx, feed, stage):
+def feed_reset(ctx, stage, confirm):
     """
-    Reset stage(s). This is a destructive action, make backups first!.
-    """
-    stage_dir = {'download' : 'zip', 'unzip' : 'xml', 'parse': 'sql', 'insert':'db'}
+    !!!USE WITH CAUTION!!!
 
-    cfg = Config.from_ctx(ctx)
-    for s in stage:
-        p = os.path.join(cfg.ed_path(), 'data', feed, stage_dir[s])
-        if click.confirm('About to delete %s. Do you want to continue?' % p):
-            shutil.rmtree(p)
-        os.makedirs(p)
+    Reset a stage. This is a destructive action, make backups first!.
+    This will delete the stage directory, including the state file and
+    all the processed resources.
+
+    !!!USE WITH CAUTION!!!
+
+    Stages are: ['download', 'unzip', 'parse', 'insert']
+
+    """
+
+    stage = filter_input_to_stage(stage)
+
+    feed    = ctx.obj[FEED]
+    path    = ctx.obj[EDDIR]
+    logger  = ctx.obj[LOGGER]
+    if confirm:
+        p = clifeed.pre_reset(logger, feed, path, stage)
+        if click.confirm('About to delete: %s. Do you want to continue?' % p):
+            click.echo(clifeed.reset(logger, feed, path, stage))
+    else:
+        click.echo(clifeed.reset(logger, feed, path, stage))
 
 @feed.command('archive', short_help='Archive feed to tar.gz')
-@click.argument('feed')
-@click.option('--archivedir', help="Directory to save archive")
+@click.option('--archivedir', help="Path to save archive", required=False, default="archive")
 @click.pass_context
-def feed_archive(ctx, feed, archivedir):
+def feed_archive_to_targz(ctx, archivedir):
     """
-    Archive a feed. Especially useful before a destructive action like 
-    resetting the feed state.
+    Archive a feed. Especially useful before a destructive action like:
+    'feed X reset'
+
+    If archivedir starts with "/" then this is an absolute path.
     """
-    click.echo(archive_locally(ctx, feed, archivedir))
+    feed    = ctx.obj[FEED]
+    path    = ctx.obj[EDDIR]
+    logger  = ctx.obj[LOGGER]
+    click.echo(clifeed.archive_locally(logger, feed, path, archivedir))
 
 @feed.command('restore', short_help='Restore feed from tar.gz')
-@click.argument('feed')
-@click.option('--archivedir', help="Directory to read archive")
+@click.argument('archive', type=click.Path(exists=True))
 @click.pass_context
-def feed_restore(ctx, feed, archivedir):
+def feed_restore_from_targz(ctx, archive):
     """
-    Restore a feed from a tar.gz. 
+    Restore a feed from an archive.
+
+    archive : tar.gz to restore
     """
-    click.echo(restore_locally(ctx, feed, archivedir))
+    feed    = ctx.obj[FEED]
+    path    = ctx.obj[EDDIR]
+    logger  = ctx.obj[LOGGER]
+    click.echo(clifeed.restore_locally(logger, feed, path, archive))
 
 
-@feed.command('proc', short_help='Process a feed through the stages')
-@click.argument('feed')
-@click.option('--stage', '-s', type=click.Choice(['zip', 'xml', 'db']))
+@feed.command('proc', short_help='Process a feed through the provided stage in ./src')
+@click.argument('stage')
 @click.pass_context
-def feed_process(ctx, feed, stage):
+def feed_procstage(ctx, stage):
     """
-    Process the feed through it's stages, in order:
+    Process the feed through the stage procesing files in the './src' 
+    directory, in lexical order.
 
-        FEED/src/10_down.py
-        FEED/src/20_unzp.py
-        FEED/src/30_inse.py
-        FEED/src/40_save.sh
+    Stages are: ['download', 'unzip', 'parse', 'insert']
 
     """
-    process_feed(ctx, feed, stage)
 
-
-def process_feed(ctx, feed, stage):
-    cfg         = Config.from_ctx(ctx)
-    feed_dir    = os.path.join(cfg.ed_path(), 'data', feed)
-    src_dir     = os.path.join(feed_dir, 'src')
-    items       = os.listdir(src_dir)
-    srtd_items  = sorted(items)
-    for item in srtd_items:
-        cmd = os.path.join(src_dir, item)
-        echo_exec(cmd, feed_dir)
-
-def echo_exec(cmd, cwd):
-    click.echo("# %s$ %s" % (cwd,cmd))
-    filename    = 'edc.log'
-    with io.open(filename, 'wb') as writer, io.open(filename, 'rb', 1) as reader:
-        process = subprocess.Popen(cmd, cwd=cwd, shell=True, stdout=writer)
-        while process.poll() is None:
-            data = reader.read()
-            if len(data) > 0 and data != "\n":
-                click.echo(reader.read())
-            time.sleep(0.1)
-        click.echo(reader.read())
-
-
-def restore_locally(ctx, feed, archivedir):
-    cfg = Config.from_ctx(ctx)
-    if archivedir is None:
-        archivedir = os.path.join(cfg.ed_path(), 'archive')
-    archive_name = os.path.join(archivedir, "%s.tar.gz" % feed)
-    tf = tarfile.open(archive_name)
-    feed_dir = os.path.join(cfg.ed_path(), 'data', feed)
-    if os.path.exists(feed_dir):
-        return "Must delete the target feed dir '%s' before restoring." % feed_dir
+    stage = filter_input_to_stage(stage, ["all"])
+    feed    = ctx.obj[FEED]
+    path    = ctx.obj[EDDIR]
+    logger  = ctx.obj[LOGGER]
+    if stage == "all":
+        for sout in clifeed.process_all_stages(logger, feed, path):
+            for output in sout:
+                for output2 in output:
+                    click.echo(output)
     else:
-        return tf.extractall(os.path.join(cfg.ed_path(), 'data', feed))
+        for sout in clifeed.process_stages(logger, feed, path, [stage]):
+            for output in sout:
+                for output2 in output:
+                    click.echo(output)
 
-def archive_locally(ctx, feed, archivedir):
-    cfg = Config.from_ctx(ctx)
-    if archivedir is None:
-        archivedir = os.path.join(cfg.ed_path(), 'archive')
-    archive_name = os.path.join(archivedir, feed)
-    root_dir = os.path.expanduser(os.path.join(cfg.ed_path(), 'data', feed))
-    return make_archive(archive_name, 'gztar', root_dir)
+@feed.command('procfile', short_help='Process a file through the stages in ./src')
+@click.argument('stage')
+@click.pass_context
+def feed_procfile(ctx, stage):
+    """
+    Process a single file through the feed's stage procesing file in the './src' 
+    directory.
+
+    Stages are: %s
+
+    """ % ["all"].extend(clifeed.STAGES)
+    stage = filter_input_to_stage(stage, ["all"])
+    feed    = ctx.obj[FEED]
+    path    = ctx.obj[EDDIR]
+    logger  = ctx.obj[LOGGER]
+    # TODO: invoke a proc file on an individual input file accross the stages
+
 
 
 @feed.command('s3archive', short_help='Archive feed to S3 bucket')
-@click.argument('feed')
 @click.option('--service', '-s', type=click.Choice(['wasabi', 'digitalocean',]), default='wasabi')
+@click.option('--operation', '-o', '-s', type=click.Choice(['copy', 'sync']), default='copy')
 @click.pass_context
-def feed_s3archive(ctx, feed, service):
+def feed_archive_to_s3(ctx, service, operation):
     """
     Archive feed to an S3 bucket.
     """
-    cfg         = Config.from_ctx(ctx)
-    feed_dir    = os.path.join(cfg.ed_path(), 'data', feed)
-    s3_dir      = os.path.join('eap', 'energy-dashboard', 'data', feed)
-    cmd         = "rclone copy --verbose --include=\"zip/*.zip\" --include=\"db/*.db\" %s %s:%s" % (feed_dir, service, s3_dir)
-    echo_exec([cmd], feed_dir)
+    feed    = ctx.obj[FEED]
+    path    = ctx.obj[EDDIR]
+    logger  = ctx.obj[LOGGER]
+    for output in clifeed.archive_to_s3(logger, feed, path, service, operation):
+        click.echo(output)
+
 
 @feed.command('s3restore', short_help='Restore feed zip files from from S3 bucket')
-@click.argument('feed')
 @click.option('--service', '-s', type=click.Choice(['wasabi', 'digitalocean',]), default='wasabi')
-@click.option('--outdir', '-o', help="Output directory to download zip files to")
 @click.pass_context
-def feed_s3restore(ctx, feed, service, outdir):
+def feed_restore_from_s3(ctx, service, outdir):
     """
     Copy S3 bucket zip files to feed dir.
     """
-    endpoints = {
-            'digitalocean'  : 'sfo2.digitaloceanspaces.com',
-            'wasabi'        : 's3.us-west-1.wasabisys.com'
-    }
-
-    cfg         = Config.from_ctx(ctx)
-    feed_dir    = os.path.join(cfg.ed_path(), 'data', feed)
-    if outdir is None:
-        outdir = os.path.join(feed_dir, 'zip')
-    s3_dir      = os.path.join('eap', 'energy-dashboard', 'data', feed)
-    with open(os.path.join(feed_dir, 'xml', 'unzipped.txt'), 'r') as zipfiles:
-        for zf in zipfiles:
-            zf = zf.rstrip()
-            s3_file = "%s/zip/%s" % (s3_dir, zf)
-            url = "https://%s/%s/zip/%s" % (endpoints[service], s3_dir, zf)
-            click.echo("downloading : %s" % url)
-            r = requests.get(url)
-            if r.status_code == 200:
-                with open(os.path.join(outdir, zf), 'wb') as fd:
-                    for chunk in r.iter_content(chunk_size=128):
-                        fd.write(chunk)
-
-#------------------------------------------------------------------------------
-# Feed.Stage
-#------------------------------------------------------------------------------
-@feed.group()
-def stage():
-    """
-    Manage the feed stages
-    """
-    pass
-
-@stage.command('download', short_help='10_down.py')
-@click.argument('feed')
-@click.pass_context
-def feed_stage_download(ctx, feed):
-    """
-    Download feed from canonical origin
-    """
-    cfg         = Config.from_ctx(ctx)
-    feed_dir    = os.path.join(cfg.ed_path(), 'data', feed)
-    echo_exec(["src/10_down.py"], feed_dir)
-
-@stage.command('unzip', short_help='20_unzp.py')
-@click.argument('feed')
-@click.pass_context
-def feed_stage_unzip(ctx, feed):
-    """
-    Unzip downloaded zip files
-    """
-    cfg         = Config.from_ctx(ctx)
-    feed_dir    = os.path.join(cfg.ed_path(), 'data', feed)
-    echo_exec("src/20_unzp.py", feed_dir)
-
-@stage.command('parse', short_help='30_pars.py')
-@click.argument('feed')
-@click.pass_context
-def feed_stage_parse(ctx, feed):
-    """
-    Parse xml files
-    """
-    cfg         = Config.from_ctx(ctx)
-    feed_dir    = os.path.join(cfg.ed_path(), 'data', feed)
-    echo_exec("src/30_pars.py", feed_dir)
-
-@stage.command('insert', short_help='40_inse.py')
-@click.argument('feed')
-@click.pass_context
-def feed_stage_insert(ctx, feed):
-    """
-    Insert sql files into database
-    """
-    cfg         = Config.from_ctx(ctx)
-    feed_dir    = os.path.join(cfg.ed_path(), 'data', feed)
-    echo_exec("src/40_inse.py", feed_dir)
-
-@stage.command('save', short_help='50_save.sh')
-@click.argument('feed')
-@click.pass_context
-def feed_stage_save(ctx, feed):
-    """
-    Save feed state
-    """
-    cfg         = Config.from_ctx(ctx)
-    feed_dir    = os.path.join(cfg.ed_path(), 'data', feed)
-    echo_exec("src/50_save.sh", feed_dir)
-
+    feed    = ctx.obj[FEED]
+    path    = ctx.obj[EDDIR]
+    logger  = ctx.obj[LOGGER]
+    for output in clifeed.restore_from_s3(logger, feed, path, service):
+        click.echo(output)
 
 #------------------------------------------------------------------------------
 # Feed.Manifest (singular)
@@ -489,84 +369,70 @@ def feed_stage_save(ctx, feed):
 @feed.group()
 def db():
     """
-    Manage a feed's database.
+    Manage a feed's database(s).
     """
     pass
 
 @db.command('createddl')
-@click.argument('feed')
 @click.option("--xmlfile", "-x", help="File to scan")
 @click.option("--save/--no-save", default=False, help="Save ddl to manifest")
 @click.pass_context
-def feed_db_create_ddl(ctx, feed, xmlfile, save):
+def feed_db_create_ddl(ctx, xmlfile, save):
     """
     Generate SQL DDL for table creation.
+
+    If no xmlfile is provided, looks at the newest xml file in the feed.
     """
-    cfg         = Config.from_ctx(ctx)
-    debug       = ctx.obj['debug']
-    feed_dir    = os.path.join(cfg.ed_path(), 'data', feed)
-    xml_dir     = os.path.join(feed_dir, 'xml')
-    manifest    = os.path.join(feed_dir, 'manifest.json')
-    with open(manifest, 'r') as f:
-        obj = json.loads(f.read())
-    if debug: click.echo(json.dumps(obj, indent=4, sort_keys=True))
-    pk_exc = obj.pop('pk_exclusion', ['value'])
-    if xmlfile is None:
-        xml_files   = list(fs.glob_dir(xml_dir, ".xml"))
-        if debug: click.echo("found %d xml files in %s" % (len(xml_files), xml_dir))
-        if len(xml_files) < 1:
-            sys.stderr.write("ERROR: no xml files found in %s" % xml_dir)
-            return
-        xmlfile    = xml_files[-1]
-    if not xmlfile.startswith(xml_dir):
-        xmlfile = os.path.join(xml_dir, xmlfile)
-    if debug: click.echo("scanning file: %s" % xmlfile)
-    with open(xmlfile, 'r') as f:
-        xst = xmlparser.XML2SQLTransormer(f).parse().scan_types().scan_tables(pk_exc)
-        new_ddl = list(xst.ddl())
-        for d in new_ddl:
-            click.echo(d)
-    if save:
-        obj['ddl_create'] = new_ddl
-        with open(manifest, 'w') as f:
-            f.write(json.dumps(obj, indent=4, sort_keys=True))
+    feed    = ctx.obj[FEED]
+    path    = ctx.obj[EDDIR]
+    logger  = ctx.obj[LOGGER]
+    click.echo(clifeed.create_and_save_ddl(logger, feed, path, xmlfile, save))
 
 @db.command('insertsql')
-@click.argument('feed')
-@click.option("--xmlfile", "-x", help="File to scan", required=True)
+@click.argument('xmlfile')
 @click.pass_context
-def feed_db_ddl(ctx, feed, xmlfile, save):
+def feed_db_generate_insertion_sql(ctx, xmlfile, save):
     """
     Generate SQL for data insertion into table.
+
+    This is really just for testing.
     """
-    cfg         = Config.from_ctx(ctx)
-    debug       = ctx.obj['debug']
-    feed_dir    = os.path.join(cfg.ed_path(), 'data', feed)
-    xml_dir     = os.path.join(feed_dir, 'xml')
-    manifest    = os.path.join(feed_dir, 'manifest.json')
-    with open(manifest, 'r') as f:
-        obj = json.loads(f.read())
-    if debug: click.echo(json.dumps(obj, indent=4, sort_keys=True))
-    pk_exc = obj.pop('pk_exclusion', ['value'])
-    if xmlfile is None:
-        xml_files   = list(fs.glob_dir(xml_dir, ".xml"))
-        if debug: click.echo("found %d xml files in %s" % (len(xml_files), xml_dir))
-        if len(xml_files) < 1:
-            sys.stderr.write("ERROR: no xml files found in %s" % xml_dir)
-            return
-        xmlfile    = xml_files[-1]
-    if not xmlfile.startswith(xml_dir):
-        xmlfile = os.path.join(xml_dir, xmlfile)
-    if debug: click.echo("scanning file: %s" % xmlfile)
-    with open(xmlfile, 'r') as f:
-        xst = xmlparser.XML2SQLTransormer(f).parse().scan_types().scan_tables(pk_exc)
-        new_ddl = list(xst.ddl())
-        for d in new_ddl:
-            click.echo(d)
-    if save:
-        obj['sql_insert'] = new_ddl
-        with open(manifest, 'w') as f:
-            f.write(json.dumps(obj, indent=4, sort_keys=True))
+    feed    = ctx.obj[FEED]
+    path    = ctx.obj[EDDIR]
+    logger  = ctx.obj[LOGGER]
+    click.echo(clifeed.generate_insertion_sql(logger, feed, path, xmlfile))
+
+@db.command('list', short_help='List the feed databases')
+@click.pass_context
+def feed_database_console(ctx):
+    """
+    A feed may have multiple databases if the schema has changed.
+
+    List the available databases with a number for use with the 'console'
+    command.
+    """
+    feed    = ctx.obj[FEED]
+    path    = ctx.obj[EDDIR]
+    logger  = ctx.obj[LOGGER]
+    feed_dir    = os.path.join(path, 'data', feed)
+    db_dir      = os.path.join(feed_dir, "db")
+    dbs     = fs.glob_dir(db_dir, ".db")
+    for db in dbs:
+        click.echo("%s\n" % db)
+
+@db.command('console', short_help='launch sqlite3 database console')
+@click.argument('db')
+@click.pass_context
+def feed_database_console(ctx, db):
+    """
+    Display the feed manifest.
+    """
+    feed    = ctx.obj[FEED]
+    path    = ctx.obj[EDDIR]
+    logger  = ctx.obj[LOGGER]
+    feed_dir    = os.path.join(path, 'data', feed)
+    fqp_db  = os.path.join(feed_dir, "db", db)
+    os.system("sqlite3 %s" % fqp_db)
 
 #------------------------------------------------------------------------------
 # Feed.Manifest (singular)
@@ -579,109 +445,53 @@ def manifest():
     pass
 
 @manifest.command('show', short_help='Display the feed manifest')
-@click.argument('feed')
 @click.pass_context
-def feed_manifest_show(ctx, feed):
+def feed_manifest_show(ctx):
     """
     Display the feed manifest.
     """
-    cfg         = Config.from_ctx(ctx)
-    feed_dir    = os.path.join(cfg.ed_path(), 'data', feed)
+    feed    = ctx.obj[FEED]
+    path    = ctx.obj[EDDIR]
+    logger  = ctx.obj[LOGGER]
+    feed_dir    = os.path.join(path, 'data', feed)
     manifest    = os.path.join(feed_dir, 'manifest.json')
     with open(manifest, 'r') as f:
         for line in f:
             click.echo(line.rstrip())
 
 @manifest.command('update', short_help='Update the feed manifest')
-@click.argument('feed')
 @click.option('--field', '-f', help="Field to update")
-@click.option('--value', help="Value to update item to")
+@click.option('--value-str', help="Value to update item to", type=str)
+@click.option('--value-int', help="Value to update item to", type=int)
 @click.pass_context
-def feed_manifest_show(ctx, feed, field, value):
+def feed_manifest_show(ctx, field, value_str, value_int):
     """
     Update the manifest.field with the value provided.
     """
-    cfg         = Config.from_ctx(ctx)
-    feed_dir    = os.path.join(cfg.ed_path(), 'data', feed)
+    feed    = ctx.obj[FEED]
+    path    = ctx.obj[EDDIR]
+    logger  = ctx.obj[LOGGER]
+
+    feed_dir    = os.path.join(path, 'data', feed)
     manifest    = os.path.join(feed_dir, 'manifest.json')
+
+    value = value_str or value_int
+
     with open(manifest, 'r') as f:
         obj = json.loads(f.read())
-    if value == "":
+    if value == None or value == "":
         obj.pop(field, None)
     else:
         obj[field] = value
     with open(manifest, 'w') as f:
         f.write(json.dumps(obj, indent=4, sort_keys=True))
 
-
-
-def dbcount(feed, feed_dir):
-    try:
-        cnx = sqlite3.connect(os.path.join(feed_dir, "db", "%s.db" % feed))
-        return cnx.execute("select count(*) from oasis").fetchone()[0]
-    except:
-        return -1
-
-def lines(f):
-    try:
-        with open(f, 'r') as x:
-            lines = x.readlines()
-            return len(lines)
-    except:
-        return 0
-
-#------------------------------------------------------------------------------
-# Config Stuff
-#------------------------------------------------------------------------------
-class Config():
-    M_ED_PATH       = 'ed_path'
-    M_CFG_FILE      = 'cfg_file'
-    M_DEBUG         = 'debug'
-    DEF_CFG_PATH    = '~/.config'
-    DEF_CFG_FILE    = 'energy-dashboard-client.config'
-    DEF_ED_PATH     = '../energy-dashboard'
-    def __init__(self, ed_path, cfg_file, debug):
-        """
-        """
-        self._ed_path    = os.path.abspath(os.path.expanduser(ed_path   or  Config.DEF_ED_PATH))
-        self._cfg_file   = os.path.abspath(os.path.expanduser(cfg_file  or  os.path.join(Config.DEF_CFG_PATH, Config.DEF_CFG_FILE)))
-        self._debug      = debug or False
-
-    def save(self) -> None:
-        with open(self._cfg_file, 'w') as outfile:
-            json.dump(self.to_map(), outfile, indent=4, sort_keys=True)
-
-    def to_map(self):
-        m               = {}
-        m[Config.M_ED_PATH]   = self._ed_path
-        m[Config.M_CFG_FILE]  = self._cfg_file
-        m[Config.M_DEBUG]     = self._debug
-        return m
-
-    def from_map(m):
-        ed_path    = m.get(Config.M_ED_PATH,     None)
-        cfg_file   = m.get(Config.M_CFG_FILE,    None)
-        debug      = m.get(Config.M_DEBUG,       None)
-        return Config(ed_path, cfg_file, debug)
-
-    def load(f:str):
-        with open(f, 'r') as json_cfg_file:
-            m = json.load(json_cfg_file)
-            return Config.from_map(m)
-
-    def from_ctx(ctx):
-        cfg = Config.load(os.path.join(os.path.expanduser(ctx.obj['config-dir']), Config.DEF_CFG_FILE))
-        return cfg
-
-    def ed_path(self):
-        return self._ed_path
-
-    def cfg_file(self):
-        return self._cfg_file
-
-    def debug(self):
-        return self._debug
-    
-    def __repr__(self):
-        return json.dumps(self.to_map(), indent=4, sort_keys=True)
+def filter_input_to_stage(stage_input, additional_stages=[]):
+    stages = clifeed.STAGES
+    stages.extend(additional_stages)
+    for s in clifeed.STAGES:
+        if s.startswith(stage_input):
+            return s
+    click.echo("ERROR: stage argument must be (or start with letters from) one of these stages: %s" % clifeed.STAGES)
+    sys.exit(-1)
 
