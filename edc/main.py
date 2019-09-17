@@ -16,6 +16,7 @@
 
 from edl.cli import feed as clifeed
 from edl.cli import feeds as clifeeds
+from edl.cli import repo as clirepo
 from edl.resources.exec import runyield
 from edl.resources import filesystem as fs
 from edl.resources import xmlparser
@@ -99,6 +100,41 @@ def license():
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
     """)
+
+#------------------------------------------------------------------------------
+# Init
+#------------------------------------------------------------------------------
+@cli.command('clone', short_help="Clone energy-dashboard locally")
+@click.pass_context
+def repo_clone(ctx):
+    """
+    Use git to clone the energy-dashboard locally.
+    
+    Clone operation(s):
+
+        git clone ... [current_directory]/energy-dashboard
+    or
+        git clone ... [--ed-dir]/energy-dashboard
+
+    After cloning, use the 'update' command to bring in
+    all the data in the submodules.
+    """
+    logger  = ctx.obj[LOGGER]
+    path = ctx.obj[EDDIR]
+    for output in clirepo.clone(logger, path):
+        click.echo(output)
+
+@cli.command('update', short_help="Update the submodules")
+@click.pass_context
+def repo_update(ctx):
+    """
+    Update the submodules that have been previously cloned
+    via the 'clone' command.
+    """
+    logger  = ctx.obj[LOGGER]
+    path = ctx.obj[EDDIR]
+    for output in clirepo.update(logger, path):
+        click.echo(output)
 
 #------------------------------------------------------------------------------
 # Feeds (plural)

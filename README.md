@@ -4,9 +4,53 @@ Command Line Interface for the Energy Dashboard.
 
 Still a WIP...
 
-## Show Help
+## Prerequisites
 
-## edc
+### Install basic deps
+
+```bash
+sudo apt install parallel
+sudo apt install build-essential
+sudo apt install git
+```
+
+### Install git-lfs
+
+https://git-lfs.github.com/
+
+### Install conda/anaconda
+
+```bash
+wget https://repo.anaconda.com/archive/Anaconda3-2019.07-Linux-x86_64.sh
+chmod +x Anaconda3-2019.07-Linux-x86_64.sh 
+./Anaconda3-2019.07-Linux-x86_64.sh 
+```
+
+## Installation
+
+See: https://geohackweek.github.io/Introductory/01-conda-tutorial/
+
+```bash
+conda update conda
+conda create -n edc python=3 numpy jupyter pandas
+conda activate edc
+pip install energy-dashboard-client
+```
+
+## Setup
+
+```bash
+mkdir foo
+cd foo
+edc clone
+cd energy-dashboard
+edc update
+```
+
+At this point you should have a working environment.
+
+
+## Show Help
 
 
 ## edc
@@ -153,3 +197,8 @@ edc feed invoke data-oasis-as-mileage-calc-all "git show HEAD"
 
 ## Author
 Todd Greenwood-Geer (Enviro Software Solutions, LLC)
+
+## Notes
+This project uses submodules, and this page has been useful:
+https://github.blog/2016-02-01-working-with-submodules/
+
