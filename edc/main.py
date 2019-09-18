@@ -341,7 +341,7 @@ def feed_procstage(ctx, stage):
     Process the feed through the stage procesing files in the './src' 
     directory, in lexical order.
 
-    Stages are: ['download', 'unzip', 'parse', 'insert']
+    Stages are: ['download', 'unzip', 'parse', 'insert', 'save', 'all']
 
     """
 

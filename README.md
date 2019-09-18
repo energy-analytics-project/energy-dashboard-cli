@@ -284,16 +284,250 @@ I've mirrored them on...
 Example:
 
 ```bash
-#edc feed [feed-name] s3restore
 edc feed data-oasis-atl-ruc-zone-map s3restore
 ```
 
 To grab the artifacts from the entire set of feeds:
 
-
 ```bash
 edc feeds list | xargs -L 1 -I {} edc feed {} s3restore
 ```
+
+Even though these are replicated on S3 and the download times are reasonable, you'll want
+to grab a coffee, take a walk, etc. while the raw dataset downloads.
+
+At the current time, only the original zip files will be downloaded.
+
+    TODO: give the s3restore command more fidelity to control what get's restored. Currently
+    it is hardwired to just download the zip files, but it's possible someone would want to
+    select any of the stage artifacts [zip, xml, sql, db].
+
+Ok, so you had coffee, took a walk, and stuff is still downloading. No problem. Pulling stuff
+off of S3 is compressing what it took me weeks to accumulate down to hour(s). Let's continue...
+
+We're downloading the feeds in this order, so the top few should have zip files:
+
+```bash
+$ edc feeds list | head
+data-oasis-atl-ruc-zone-map
+data-oasis-cbd-nodal-grp-cnstr-prc
+data-oasis-cmmt-rmr-dam
+data-oasis-atl-sp-tie
+data-oasis-prc-mpm-cnstr-cmp-dam
+data-oasis-trns-curr-usage-all-all
+data-oasis-ene-baa-mkt-events-rtd-all
+data-oasis-ene-eim-transfer-limit-all-all
+data-oasis-as-results-dam
+data-oasis-ene-wind-solar-summary
+```
+
+So let's process the first feed in the list and make sure everything in the tool chain works...
+
+First, let's use the `invoke` commannd to execute arbitrary commands from that directory:
+
+```bash
+edc feed data-oasis-atl-ruc-zone-map invoke 'ls zip' | head
+
+oasis_SZ_q_ATL_RUC_ZONE_MAP_sdt_20130101T07_00-0000_edt_20130102T07_00-0000_v_1.zip
+oasis_SZ_q_ATL_RUC_ZONE_MAP_sdt_20130102T07_00-0000_edt_20130103T07_00-0000_v_1.zip
+oasis_SZ_q_ATL_RUC_ZONE_MAP_sdt_20130103T07_00-0000_edt_20130104T07_00-0000_v_1.zip
+oasis_SZ_q_ATL_RUC_ZONE_MAP_sdt_20130104T07_00-0000_edt_20130105T07_00-0000_v_1.zip
+oasis_SZ_q_ATL_RUC_ZONE_MAP_sdt_20130105T07_00-0000_edt_20130106T07_00-0000_v_1.zip
+oasis_SZ_q_ATL_RUC_ZONE_MAP_sdt_20130106T07_00-0000_edt_20130107T07_00-0000_v_1.zip
+oasis_SZ_q_ATL_RUC_ZONE_MAP_sdt_20130107T07_00-0000_edt_20130108T07_00-0000_v_1.zip
+oasis_SZ_q_ATL_RUC_ZONE_MAP_sdt_20130108T07_00-0000_edt_20130109T07_00-0000_v_1.zip
+oasis_SZ_q_ATL_RUC_ZONE_MAP_sdt_20130109T07_00-0000_edt_20130110T07_00-0000_v_1.zip
+oasis_SZ_q_ATL_RUC_ZONE_MAP_sdt_20130110T07_00-0000_edt_20130111T07_00-0000_v_1.zip
+```
+
+```bash
+edc feed data-oasis-atl-ruc-zone-map invoke 'ls zip' | wc
+
+    2451    2450  205727
+```
+
+Cool, so we have 2451 zip files to play with. That should match the number of lines
+in the ./xml/state.txt file:
+
+```bash
+edc feed data-oasis-atl-ruc-zone-map invoke 'cat zip/state.txt' | wc
+
+    2450    2449  355106
+```
+
+Close enough. Let's try to generate the database, which is done
+with the `proc` command:
+
+```bash
+edc feed data-oasis-atl-ruc-zone-map proc --help
+Usage: edc feed proc [OPTIONS] STAGE
+
+  Process the feed through the stage procesing files in the './src'  directory, in lexical order.
+
+  Stages are: ['download', 'unzip', 'parse', 'insert']
+
+Options:
+  --help  Show this message and exit.
+```
+
+TODO: add the 'all' stage and the 'save' stage.
+
+Let's run through them one at a time to make sure everything
+works as expected...
+
+
+```bash
+edc feed data-oasis-atl-ruc-zone-map proc download
+
+{"ts":"09/18/2019 01:33:16 PM", "msg":{"src": "data-oasis-atl-ruc-zone-map", "action": "download", "url": "http://oasis.caiso.com/oasisapi/SingleZip?queryname=ATL_RUC_ZONE_MAP&startdatetime=20190916T07:00-0000&enddatetime=20190917T07:00-0000&version=1", "file": "oasis_SZ_q_ATL_RUC_ZONE_MAP_sdt_20190916T07_00-0000_edt_20190917T07_00-0000_v_1.zip"}}
+```
+
+Ok, so we downloaded a single file. This make sense. I ran this yesterday so I'd only expect to see a single new file. Today is:
+
+```bash
+date
+
+Wed Sep 18 13:34:51 PDT 2019
+```
+
+The start date on that download is: sdt_20190916T07_00-0000
+The end date is: edt_20190917T07_00-0000
+
+'sdt' : abbreviation for 'start date'
+'edt' : abbreviation for 'end date'
+
+So today is 9/18, so the latest it can grab a report for is 9/17. Looks good.
+
+What got modified on the local system?
+
+```bash
+edc feed data-oasis-atl-ruc-zone-map invoke 'git status'
+
+HEAD detached at ca440b3
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git checkout -- <file>..." to discard changes in working directory)
+
+	modified:   zip/state.txt
+
+no changes added to commit (use "git add" and/or "git commit -a")
+```
+
+Notice that the zip file, which is in the ./zip directory, is not showing up. In 
+fact it is explicitly excluded from the git repository. So are the other intermediate
+files like .sql and .xml. These files are expected to be replicated to the S3 buckets,
+but not stored in the git repository. Only the sqlite3 .db files are stored in 
+git using git-lfs, and even that might change in the future if it's a pain. Time will tell.
+
+
+So what changed in the zip/state.txt file?
+
+```bash
+$ edc feed data-oasis-atl-ruc-zone-map invoke 'git diff'
+
+diff --git a/zip/state.txt b/zip/state.txt
+index 92e0f63..b394e8f 100644
+--- a/zip/state.txt
++++ b/zip/state.txt
+@@ -2447,3 +2447,4 @@ http://oasis.caiso.com/oasisapi/SingleZip?queryname=ATL_RUC_ZONE_MAP&startdateti
+ http://oasis.caiso.com/oasisapi/SingleZip?queryname=ATL_RUC_ZONE_MAP&startdatetime=20190913T07:00-0000&enddatetime=20190914T07:00-0000&version=1
+ http://oasis.caiso.com/oasisapi/SingleZip?queryname=ATL_RUC_ZONE_MAP&startdatetime=20190914T07:00-0000&enddatetime=20190915T07:00-0000&version=1
+ http://oasis.caiso.com/oasisapi/SingleZip?queryname=ATL_RUC_ZONE_MAP&startdatetime=20190915T07:00-0000&enddatetime=20190916T07:00-0000&version=1
++http://oasis.caiso.com/oasisapi/SingleZip?queryname=ATL_RUC_ZONE_MAP&startdatetime=20190916T07:00-0000&enddatetime=20190917T07:00-0000&version=1
+```
+
+*The zip/state.txt file contains the urls for the artifacts that have been downloaded.*
+
+Let's move on to the next stage...
+
+```bash
+edc feed data-oasis-atl-ruc-zone-map proc unzip
+
+$ edc feed data-oasis-atl-ruc-zone-map invoke 'ls xml'
+
+20190916_20190917_ATL_RUC_ZONE_MAP_N_20190918_13_33_16_v1.xml
+state.txt
+```
+
+There is only 1 file in the ./xml directory. This is because the `s3restore` command only restored the
+zip file artifacts. Then, the `proc unzip` command only processed the new file that's not in the
+./xml/state.txt file. Normally, this is fine, but right now, we want to re-run the entire pipeline from
+scratch (but using the zip files we restored from s3). What to do? Reset the stage(s)...
+
+```bash
+$ edc feed data-oasis-atl-ruc-zone-map reset --help
+Usage: edc feed reset [OPTIONS] STAGE
+
+  !!!USE WITH CAUTION!!!
+
+  Reset a stage. This is a destructive action, make backups first!. This
+  will delete the stage directory, including the state file and all the
+  processed resources.
+
+  !!!USE WITH CAUTION!!!
+
+  Stages are: ['download', 'unzip', 'parse', 'insert']
+
+Options:
+  --confirm / --no-confirm
+  --help
+```
+
+In this case we want to reset the last 3 stages...
+
+```bash
+edc feed data-oasis-atl-ruc-zone-map reset unzip
+About to delete: /home/toddg/proj/energy-dashboard/data/data-oasis-atl-ruc-zone-map/xml. Do you want to continue? [y/N]: y
+/home/toddg/proj/energy-dashboard/data/data-oasis-atl-ruc-zone-map/xml
+
+
+edc feed data-oasis-atl-ruc-zone-map reset parse
+About to delete: /home/toddg/proj/energy-dashboard/data/data-oasis-atl-ruc-zone-map/sql. Do you want to continue? [y/N]: y
+/home/toddg/proj/energy-dashboard/data/data-oasis-atl-ruc-zone-map/sql
+
+
+edc feed data-oasis-atl-ruc-zone-map reset insert
+About to delete: /home/toddg/proj/energy-dashboard/data/data-oasis-atl-ruc-zone-map/db. Do you want to continue? [y/N]: y
+{"ts":"09/18/2019 01:44:54 PM", "msg":{"name": "edl.cli.feed", "method": "reset", "path": "/home/toddg/proj/energy-dashboard", "feed": "data-oasis-atl-ruc-zone-map", "target_dir": "/home/toddg/proj/energy-dashboard/data/data-oasis-atl-ruc-zone-map/db", "ERROR": "failed to remove target_dir", "exception": "[Errno 2] No such file or directory: '/home/toddg/proj/energy-dashboard/data/data-oasis-atl-ruc-zone-map/db'"}}
+```
+
+TODO: fix this error message when the directory does not exist.
+
+Let's examine what the `status` of this feed is now:
+
+```bash
+edc feed data-oasis-atl-ruc-zone-map status
+
+feed name,downloaded,unzipped,parsed,inserted
+data-oasis-atl-ruc-zone-map,2450,0,0,0
+```
+
+We have 2450 records in the zip/state.txt file to play with.
+
+Let's re-unzip and see what happens to the state:
+
+```bash
+edc feed data-oasis-atl-ruc-zone-map proc unzip
+
+edc feed data-oasis-atl-ruc-zone-map status
+
+feed name,downloaded,unzipped,parsed,inserted
+data-oasis-atl-ruc-zone-map,2450,2450,0,0
+```
+
+Ok, so now we have 2450 downloaded zip files and 2450 extracted xml files (as tracked
+by the respective state files). Onwards...
+
+```bash
+edc feed data-oasis-atl-ruc-zone-map proc parse
+
+{"ts":"09/18/2019 01:49:30 PM", "msg":{"src": "data-oasis-atl-ruc-zone-map", "action": "parse_file", "infile": "20150201_20150202_ATL_RUC_ZONE_MAP_N_20190811_04_45_40_v1.xml", "outfile": "/home/toddg/proj/energy-dashboard/data/data-oasis-atl-ruc-zone-map/sql/20150201_20150202_ATL_RUC_ZONE_MAP_N_20190811_04_45_40_v1.sql", "total_ddl": 8, "total_sql": 7688}}
+{"ts":"09/18/2019 01:49:34 PM", "msg":{"src": "data-oasis-atl-ruc-zone-map", "action": "parse_file", "infile": "20150717_20150718_ATL_RUC_ZONE_MAP_N_20190811_05_00_30_v1.xml", "outfile": "/home/toddg/proj/energy-dashboard/data/data-oasis-atl-ruc-zone-map/sql/20150717_20150718_ATL_RUC_ZONE_MAP_N_20190811_05_00_30_v1.sql", "total_ddl": 8, "total_sql": 7688}}
+```
+
+Now this is going to take awhile to process all of the xml files and generate these sql files. While that's running, let's take a look at 
+a generated .sql file:
+
 
 
 
