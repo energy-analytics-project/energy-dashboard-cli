@@ -521,16 +521,56 @@ by the respective state files). Onwards...
 ```bash
 edc feed data-oasis-atl-ruc-zone-map proc parse
 
-{"ts":"09/18/2019 01:49:30 PM", "msg":{"src": "data-oasis-atl-ruc-zone-map", "action": "parse_file", "infile": "20150201_20150202_ATL_RUC_ZONE_MAP_N_20190811_04_45_40_v1.xml", "outfile": "/home/toddg/proj/energy-dashboard/data/data-oasis-atl-ruc-zone-map/sql/20150201_20150202_ATL_RUC_ZONE_MAP_N_20190811_04_45_40_v1.sql", "total_ddl": 8, "total_sql": 7688}}
-{"ts":"09/18/2019 01:49:34 PM", "msg":{"src": "data-oasis-atl-ruc-zone-map", "action": "parse_file", "infile": "20150717_20150718_ATL_RUC_ZONE_MAP_N_20190811_05_00_30_v1.xml", "outfile": "/home/toddg/proj/energy-dashboard/data/data-oasis-atl-ruc-zone-map/sql/20150717_20150718_ATL_RUC_ZONE_MAP_N_20190811_05_00_30_v1.sql", "total_ddl": 8, "total_sql": 7688}}
+{"ts":"09/18/2019 04:06:53 PM", "msg":{"src": "data-oasis-atl-ruc-zone-map", "action": "parse_file", "infile": "20140710_20140711_ATL_RUC_ZONE_MAP_N_20190811_04_27_04_v1.xml", "outfile": "/home/toddg/proj/energy-dashboard/data/data-oasis-atl-ruc-zone-map/sql/20140710_20140711_ATL_RUC_ZONE_MAP_N_20190811_04_27_04_v1.sql", "total_ddl": 8, "total_sql": 7688}}
+{"ts":"09/18/2019 04:06:57 PM", "msg":{"src": "data-oasis-atl-ruc-zone-map", "action": "parse_file", "infile": "20150714_20150715_ATL_RUC_ZONE_MAP_N_20190811_05_00_12_v1.xml", "outfile": "/home/toddg/proj/energy-dashboard/data/data-oasis-atl-ruc-zone-map/sql/20150714_20150715_ATL_RUC_ZONE_MAP_N_20190811_05_00_12_v1.sql", "total_ddl": 8, "total_sql": 7688}}
 ```
 
 Now this is going to take awhile to process all of the xml files and generate these sql files. While that's running, let's take a look at 
 a generated .sql file:
 
+```bash
+$ cat /home/toddg/proj/energy-dashboard/data/data-oasis-atl-ruc-zone-map/sql/20130708_20130709_ATL_RUC_ZONE_MAP_N_20190811_03_54_06_v1.sql | head
 
+CREATE TABLE IF NOT EXISTS oasismaster (xmlns TEXT, PRIMARY KEY (xmlns));
+CREATE TABLE IF NOT EXISTS messageheader (timedate TEXT, source TEXT, version TEXT, oasismaster_xmlns TEXT, FOREIGN KEY (oasismaster_xmlns) REFERENCES oasismaster(xmlns), PRIMARY KEY (timedate, source, version));
+CREATE TABLE IF NOT EXISTS messagepayload (id TEXT, oasismaster_xmlns TEXT, FOREIGN KEY (oasismaster_xmlns) REFERENCES oasismaster(xmlns), PRIMARY KEY (id));
+CREATE TABLE IF NOT EXISTS rto (name TEXT, messagepayload_id TEXT, FOREIGN KEY (messagepayload_id) REFERENCES messagepayload(id), PRIMARY KEY (name));
+CREATE TABLE IF NOT EXISTS atls_item (id TEXT, rto_name TEXT, FOREIGN KEY (rto_name) REFERENCES rto(name), PRIMARY KEY (id));
+CREATE TABLE IF NOT EXISTS atls_header (tz TEXT, system TEXT, report TEXT, atls_item_id TEXT, FOREIGN KEY (atls_item_id) REFERENCES atls_item(id), PRIMARY KEY (tz, system, report));
+CREATE TABLE IF NOT EXISTS atls_data (pnode_name TEXT, start_date_gmt TEXT, end_date_gmt TEXT, ruc_zone_name TEXT, end_date TEXT, start_date TEXT, atls_item_id TEXT, FOREIGN KEY (atls_item_id) REFERENCES atls_item(id), PRIMARY KEY (pnode_name, start_date_gmt, end_date_gmt, ruc_zone_name, end_date, start_date));
+CREATE TABLE IF NOT EXISTS disclaimer_item (disclaimer TEXT, rto_name TEXT, FOREIGN KEY (rto_name) REFERENCES rto(name), PRIMARY KEY (disclaimer));
+INSERT OR IGNORE INTO oasismaster (xmlns) VALUES ("http://www.caiso.com/soa/OASISMaster_v1.xsd");
+INSERT OR IGNORE INTO messageheader (source, timedate, version, oasismaster_xmlns) VALUES ("OASIS", "2019-08-11T10:54:06-00:00", "v20131201", "http://www.caiso.com/soa/OASISMaster_v1.xsd");
+```
 
+So a couple of things to notice here. First, the DDL is included at the top of every file. This allows the creation of the sql tables at any point
+in the pipeline. So if, for example, the data feed structurally changes from one file to the next, then the DDL will change. Later in the pipeline,
+when we process this .sql file, if it fails b/c the schema has changed, then a new table will be created.
 
+For now, let's verify that the DDL and associated SQL insert statements are correct. This command will process this file into an in-memory
+sqlite3 db instance. If it fails, then we know we have an error in either the DDL or the SQL.
+
+```bash
+$ cat /home/toddg/proj/energy-dashboard/data/data-oasis-atl-ruc-zone-map/sql/20130708_20130709_ATL_RUC_ZONE_MAP_N_20190811_03_54_06_v1.sql | sqlite3
+```
+
+Now, it might take some time to process all the .xml files into the .sql files. So CTRL-C out of the running process and let's move on to
+the next stage, 'insert'.
+
+```bash
+$ edc feed data-oasis-atl-ruc-zone-map status
+
+feed name,downloaded,unzipped,parsed,inserted
+data-oasis-atl-ruc-zone-map,2450,2450,98,0
+```
+
+Ok, so only 98 out of the 2450 xml files have been turned into sql files. No problem. Let's insert the 98 sql files into the database and see what we have.
+
+```bash
+$ edc feed data-oasis-atl-ruc-zone-map proc insert
+{"ts":"09/18/2019 04:13:44 PM", "msg":{"name": "edl.resources.db", "src": "data-oasis-atl-ruc-zone-map", "method": "insert", "sql_dir": "/home/toddg/proj/energy-dashboard/data/data-oasis-atl-ruc-zone-map/sql", "db_dir": "/home/toddg/proj/energy-dashboard/data/data-oasis-atl-ruc-zone-map/db", "new_files": 99}}
+{"ts":"09/18/2019 04:13:44 PM", "msg":{"name": "edl.resources.db", "src": "data-oasis-atl-ruc-zone-map", "method": "insert", "sql_dir": "/home/toddg/proj/energy-dashboard/data/data-oasis-atl-ruc-zone-map/sql", "db_dir": "/home/toddg/proj/energy-dashboard/data/data-oasis-atl-ruc-zone-map/db", "db_name": "data-oasis-atl-ruc-zone-map_00.db", "file_idx": 0, "sql_file": "/home/toddg/proj/energy-dashboard/data/data-oasis-atl-ruc-zone-map/sql/20190204_20190205_ATL_RUC_ZONE_MAP_N_20190811_06_56_57_v1.sql", "depth": 0, "message": "started"}}
+```
 
 ### Add New Data Feed
 
