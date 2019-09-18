@@ -572,6 +572,121 @@ $ edc feed data-oasis-atl-ruc-zone-map proc insert
 {"ts":"09/18/2019 04:13:44 PM", "msg":{"name": "edl.resources.db", "src": "data-oasis-atl-ruc-zone-map", "method": "insert", "sql_dir": "/home/toddg/proj/energy-dashboard/data/data-oasis-atl-ruc-zone-map/sql", "db_dir": "/home/toddg/proj/energy-dashboard/data/data-oasis-atl-ruc-zone-map/db", "db_name": "data-oasis-atl-ruc-zone-map_00.db", "file_idx": 0, "sql_file": "/home/toddg/proj/energy-dashboard/data/data-oasis-atl-ruc-zone-map/sql/20190204_20190205_ATL_RUC_ZONE_MAP_N_20190811_06_56_57_v1.sql", "depth": 0, "message": "started"}}
 ```
 
+Again, CTRL-C after a few of these have processed and let's take a look at the database...
+
+```bash
+$ edc feed data-oasis-atl-ruc-zone-map db --help
+Usage: edc feed db [OPTIONS] COMMAND [ARGS]...
+
+  Manage a feed's database(s).
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  console    launch sqlite3 database console
+  createddl  Generate SQL DDL for table creation.
+  insertsql  Generate SQL for data insertion into table.
+  list       List the feed databases
+```
+
+Ok, so what databoses do we have?
+
+```bash
+$ edc feed data-oasis-atl-ruc-zone-map db list
+data-oasis-atl-ruc-zone-map_00.db
+```
+
+Ah, good. Just one. Let's take a peek...
+
+```bash
+$ edc feed data-oasis-atl-ruc-zone-map db console data-oasis-atl-ruc-zone-map_00.db
+
+SQLite version 3.29.0 2019-07-10 17:32:03
+Enter ".help" for usage hints.
+sqlite>
+```
+
+Bingo, we are in! What's in it?
+
+```bash
+sqlite> .tables
+atls_data        atls_item        messageheader    oasismaster    
+atls_header      disclaimer_item  messagepayload   rto            
+```
+
+Ok, so I'm going to guess that we want to look at 'atls_data':
+
+```bash
+sqlite> pragma table_info(atls_data);
+0|pnode_name|TEXT|0||1
+1|start_date_gmt|TEXT|0||2
+2|end_date_gmt|TEXT|0||3
+3|ruc_zone_name|TEXT|0||4
+4|end_date|TEXT|0||5
+5|start_date|TEXT|0||6
+6|atls_item_id|TEXT|0||0
+```
+
+And what's the data look like?
+```bash
+sqlite> select * from atls_data limit 10;
+PRKWAY_2_LD1|2009-03-31T07:00:00-00:00|2031-01-01T07:59:59-00:00|RUC_PGAE|2030-12-31T23:59:59|2009-03-31T00:00:00|74466c6d-55fc-4978-9c0d-7ea67a87f9eb
+MRYSVL_6_LD2|2009-03-31T07:00:00-00:00|2031-01-01T07:59:59-00:00|RUC_PGAE|2030-12-31T23:59:59|2009-03-31T00:00:00|e481dd77-d2e4-42f3-b985-06195618f5ee
+SNTABL_6_LD30|2009-03-31T07:00:00-00:00|2031-01-01T07:59:59-00:00|RUC_SDGE|2030-12-31T23:59:59|2009-03-31T00:00:00|b654a7a4-5ac9-44b2-9f3b-7bd20005da37
+PALMER_1_LD1|2009-03-31T07:00:00-00:00|2031-01-01T07:59:59-00:00|RUC_PGAE|2030-12-31T23:59:59|2009-03-31T00:00:00|b5a6e60d-61c7-4baa-a98e-e2bdfa176c80
+POWAY_6_LD31|2009-03-31T07:00:00-00:00|2031-01-01T07:59:59-00:00|RUC_SDGE|2030-12-31T23:59:59|2009-03-31T00:00:00|17d495fc-4317-44b0-82a3-ce669aefc869
+PRCTVY_1_LD42|2009-03-31T07:00:00-00:00|2031-01-01T07:59:59-00:00|RUC_SDGE|2030-12-31T23:59:59|2009-03-31T00:00:00|632fde0d-ccf8-4643-b759-87340ddd9a50
+ORTGA_6_LD1|2009-03-31T07:00:00-00:00|2031-01-01T07:59:59-00:00|RUC_PGAE|2030-12-31T23:59:59|2009-03-31T00:00:00|5accad7b-06b9-43d4-a6ce-77edc5334e87
+SOBAY_6_GN-A1XA2|2009-03-31T07:00:00-00:00|2031-01-01T07:59:59-00:00|RUC_SDGE|2030-12-31T23:59:59|2009-03-31T00:00:00|ab398edd-e8b0-4d81-aaab-683043e97dd0
+CAWELO_6_LD-B|2009-03-31T07:00:00-00:00|2031-01-01T07:59:59-00:00|RUC_PGAE|2030-12-31T23:59:59|2009-03-31T00:00:00|4de47a31-34ec-4785-8c09-d30d3a0247a4
+LNTREE_2_LD1|2009-03-31T07:00:00-00:00|2031-01-01T07:59:59-00:00|RUC_PGAE|2030-12-31T23:59:59|2009-03-31T00:00:00|0eb6b341-a5ad-4bcf-b2b4-727b0a1e92d4
+```
+
+Note that the guid looking things are, in fact, guids. Because there's no way to generate the .sql files *and* know the rowid of a previously inserted
+item in a parent table, I'm using the 'time-worn'(tm) strategy of generating uuids out-of-band of the database for table relationships.
+
+At this point, we have a functioning system. Now's a good time to dial up the processing and try and use all the horsepower of my desktop machine.
+You see, because each stage is restartable, and each data feed is separate, I can use an sort of parallel processing strategy to orchestrate.
+
+
+```bash
+edc feeds list | parallel "edc feed {} reset unzip --no-confirm"
+edc feeds list | parallel "edc feed {} reset parse --no-confirm"
+edc feeds list | parallel "edc feed {} reset insert --no-confirm"
+```
+
+Ok, so now we are in a clean state. Files are still downloading on the process we launched before. But while that's running, we can start
+processing the currently downloaded files. It's basically an eventually consistent sort of thing...
+
+```bash
+$ edc feeds list | parallel "edc feed {} status --no-header"
+
+data-oasis-atl-ruc-zone-map,2450,0,0,0
+data-oasis-ene-wind-solar-summary,2449,0,0,0
+data-oasis-cbd-nodal-grp-cnstr-prc,2449,0,0,0
+data-oasis-cmmt-rmr-dam,2449,0,0,0
+data-oasis-atl-sp-tie,2449,0,0,0
+data-oasis-ene-eim-transfer-limit-all-all,2449,0,0,0
+data-oasis-prc-mpm-cnstr-cmp-dam,2449,0,0,0
+data-oasis-ene-baa-mkt-events-rtd-all,2449,0,0,0
+data-oasis-prc-cd-rtm-nomogram-rctm-all,2449,0,0,0
+```
+
+So there is plenty of downloaded zip files from the s3restore command to start processing.
+Let's go...
+
+First, we unzip...
+
+```bash
+edc feeds list | parallel --max-procs 70% "edc feed {} proc unzip"
+```
+
+
+
+
+
+
 ### Add New Data Feed
 
 TODO
