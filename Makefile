@@ -59,5 +59,5 @@ test-publish:
 	twine upload --repository testpypi dist/*
 
 .PHONY: prod-publish
-prod-publish: 
+prod-publish: clean build
 	twine upload --repository pypi dist/*
