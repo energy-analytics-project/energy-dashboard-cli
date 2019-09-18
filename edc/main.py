@@ -508,27 +508,14 @@ def feed_manifest_show(ctx):
 @click.option('--value-str', help="Value to update item to", type=str)
 @click.option('--value-int', help="Value to update item to", type=int)
 @click.pass_context
-def feed_manifest_show(ctx, field, value_str, value_int):
+def feed_manifest_update(ctx, field, value_str, value_int):
     """
     Update the manifest.field with the value provided.
     """
     feed    = ctx.obj[FEED]
     path    = ctx.obj[EDDIR]
     logger  = ctx.obj[LOGGER]
-
-    feed_dir    = os.path.join(path, 'data', feed)
-    manifest    = os.path.join(feed_dir, 'manifest.json')
-
-    value = value_str or value_int
-
-    with open(manifest, 'r') as f:
-        obj = json.loads(f.read())
-    if value == None or value == "":
-        obj.pop(field, None)
-    else:
-        obj[field] = value
-    with open(manifest, 'w') as f:
-        f.write(json.dumps(obj, indent=4, sort_keys=True))
+    clifeed.manifest_update(logger, feed, path, field, value_str, value_int)
 
 def filter_input_to_stage(stage_input, additional_stages=[]):
     stages = clifeed.STAGES
