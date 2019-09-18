@@ -22,16 +22,8 @@ from edl.resources import filesystem as fs
 from edl.resources import xmlparser
 from edl.resources import log
 import click
-import io
-import json
 import os
-import pdb
-import requests
-import shutil
-import sqlite3
-import subprocess
 import sys
-import time
 import logging
 
 # CTX OBJ KEYS
@@ -405,7 +397,7 @@ def feed_archive_to_s3(ctx, service, operation):
 @feed.command('s3restore', short_help='Restore feed zip files from from S3 bucket')
 @click.option('--service', '-s', type=click.Choice(['wasabi', 'digitalocean',]), default='wasabi')
 @click.pass_context
-def feed_restore_from_s3(ctx, service, outdir):
+def feed_restore_from_s3(ctx, service):
     """
     Copy S3 bucket zip files to feed dir.
     """

@@ -74,7 +74,7 @@ conda activate edc-cli
 Then install the energy-dashboard-client:
 
 ```bash
-pip install energy-dashboard-client
+pip install -U energy-dashboard-client
 ```
 
 
@@ -101,9 +101,96 @@ edc update
 
 At this point you should have a working environment:
 
+Verify that you have files:
+
+```bash
+$ tree -L 1
+.
+├── data
+├── docs
+├── LICENSE
+├── notebooks
+├── README.md
+└── run.sh
 ```
-foo/energy-dashboard/data/[...about ~91 submodules here ...]
+
+Verify that `edc` works:
+
+```bash
+`$ edc --help
+Usage: edc [OPTIONS] COMMAND [ARGS]...
+
+  Command Line Interface for the Energy Dashboard. This tooling  collects
+  information from a number of data feeds, imports that data,  transforms
+  it, and inserts it into a database.
+
+Options:
+  --ed-dir TEXT                   Energy Dashboard directory (defaults to cwd)
+  --log-level [CRITICAL|ERROR|WARNING|INFO|DEBUG]
+  --help                          Show this message and exit.
+
+Commands:
+  clone    Clone energy-dashboard locally
+  feed     Manage individual 'feed' (singular).
+  feeds    Manage the full set of data 'feeds' (plural).
+  license  Show the license (GPL v3).
+  update   Update the submodules
 ```
+
+Verify that you can list out the data feeds:
+
+```bash
+$ edc feeds list | head
+data-oasis-atl-ruc-zone-map
+data-oasis-cbd-nodal-grp-cnstr-prc
+data-oasis-cmmt-rmr-dam
+data-oasis-atl-sp-tie
+data-oasis-prc-mpm-cnstr-cmp-dam
+data-oasis-trns-curr-usage-all-all
+data-oasis-ene-baa-mkt-events-rtd-all
+data-oasis-ene-eim-transfer-limit-all-all
+data-oasis-as-results-dam
+data-oasis-ene-wind-solar-summary
+```
+
+Using `find` we can verify that we don't have any data files 
+such as .zip, .xml, or .sql in the tree, but that we _do_ have
+the state files:
+
+```
+$ find data/ | grep state | head
+data/data-oasis-atl-ruc-zone-map/sql/state.txt
+data/data-oasis-atl-ruc-zone-map/xml/state.txt
+data/data-oasis-atl-ruc-zone-map/zip/state.txt
+data/data-oasis-cbd-nodal-grp-cnstr-prc/sql/state.txt
+data/data-oasis-cbd-nodal-grp-cnstr-prc/xml/state.txt
+data/data-oasis-cbd-nodal-grp-cnstr-prc/zip/state.txt
+data/data-oasis-cmmt-rmr-dam/sql/state.txt
+data/data-oasis-cmmt-rmr-dam/xml/state.txt
+data/data-oasis-cmmt-rmr-dam/zip/state.txt
+data/data-oasis-atl-sp-tie/sql/state.txt
+```
+
+Now verify what databases you have downloaded...
+
+```bash
+$ find data/ | grep "\.db$" | head
+data/data-oasis-atl-gen-cap-lst/db/data-oasis-atl-gen-cap-lst_00.db
+data/data-oasis-sld-adv-fcst-rtd/db/data-oasis-sld-adv-fcst-rtd_01.db
+data/data-oasis-sld-adv-fcst-rtd/db/data-oasis-sld-adv-fcst-rtd_00.db
+data/data-oasis-sld-sf-eval-dmd-fcst/db/data-oasis-sld-sf-eval-dmd-fcst_00.db
+data/data-oasis-sld-sf-eval-dmd-fcst/db/data-oasis-sld-sf-eval-dmd-fcst_03.db
+data/data-oasis-sld-sf-eval-dmd-fcst/db/data-oasis-sld-sf-eval-dmd-fcst_01.db
+data/data-oasis-sld-sf-eval-dmd-fcst/db/data-oasis-sld-sf-eval-dmd-fcst_05.db
+data/data-oasis-sld-sf-eval-dmd-fcst/db/data-oasis-sld-sf-eval-dmd-fcst_04.db
+data/data-oasis-sld-sf-eval-dmd-fcst/db/data-oasis-sld-sf-eval-dmd-fcst_02.db
+data/data-oasis-ene-flex-ramp-dc-rtd-all/db/data-oasis-ene-flex-ramp-dc-rtd-all_00.db
+```
+
+I'll go over this in more detail below, but the reason there are multiple database files 
+for a given data feed is because the feed has multiple formats (argh!) and I 
+have not yet sorted out how to deal with that. More on this later.
+
 
 ## Use Cases
 
@@ -111,7 +198,102 @@ foo/energy-dashboard/data/[...about ~91 submodules here ...]
 
 TODO
 
+This is what most of the users of this project want to do.
+
 ### Process Data Feeds
+
+At a high level, a data feed is simply a url and some instructions for processing
+it. The url is stored in the `manifest.json`, and the processing instructions
+are stored in the `./src` directory. The `./src` directory contains python files
+that handle downloading, parsing, constructing sql insert statements, and inserting
+the data into a sqlite3 database. See the section on `Add New Data Feed` for more
+details on the construction of a data feed.
+
+Data feeds are processed in stages, and you can think of this as a vertical to
+horizontal processing.
+
+Horizontally, the process is very simple, we move from downloading a resource
+through the stages until we insert the records into a database. The DATABASE 
+is the final product.
+
+```bash
+DOWNLOAD -> EXTRACT -> PARSE -> SQL -> INSERT -> *DATABASE*
+```
+
+Vertically, the process is also very simple. Each stage processes all the artifacts
+from the previous stage. However, we need this to be robust and re-startable. No idea
+if that's a word, but it's a real thing. Machines crash, or you may need to stop
+for some reason. I've also had the case where I had an error in the logic in a given
+stage, and needed to start over from scratch. How do we do this here? Easy. A `state`
+file:
+
+```bash
+DOWNLOAD        -> EXTRACT     -> PARSE SQL     -> INSERT       -> *DATABASE*
+./zip/          ./xml/          ./sql/          ./db/
+    state.txt       state.txt       state.txt       state.txt
+```
+
+Each state.txt contains a list of artifacts that have already been processed. 
+Originally I called these: ./zip/downloaded.txt, ./xml/unzipped.txt, etc. But 
+after working with this for a few days, it is easier to just `cat` out [dir]/state.txt
+rather than remembering what each state file is named.
+
+Each stage in the pipeline looks at the artifacts in the previous stage and compares
+that list with the list of previously processed artifacts in it's `state.txt` file, and
+then gives the delta of new files to the processing code.
+
+So, to restart a given stage, you just delete the stage directory. This deletes all 
+the generated artifacts *and* the state file. Voila. You are ready to start over.
+
+Note: if you delete a stage, you may want to delete the subsequent stages, too.
+
+Here's the command that does this for you:
+
+```bash
+edc feed [feed name] reset [stage]
+```
+
+And to process a given stage:
+
+```bash
+edc feed [feed name] proc [stage]
+```
+
+Here's the scenario. I've been writing the code for this project on my laptop. But it does
+not have the horsepower to crunch all this data into the various sqlite databases in
+a reasonable amount of time. So I'm firing up a desktop machine to perform the heavy
+lifting. Here's what that process looks like. This is the same process any researcher 
+that wanted to replicate my work would want to do.
+
+Clone and update
+
+```bash
+mkdir foo
+edc clone
+cd energy-dashboard
+edc update
+```
+
+At this point, we have the energy-dashboard project, but we don't want to re-download
+all the previously downloaded files from their original source. In the case of CAISO
+OASIS, that would simply take too long (I've calculated the upper bound as 152 days, 
+though in reality it took about 3 weeks to download the resources here). Instead, we
+can pull these previously downloaded artifacts from one of the public S3 buckets that
+I've mirrored them on...
+
+Example:
+
+```bash
+#edc feed [feed-name] s3restore
+edc feed data-oasis-atl-ruc-zone-map s3restore
+```
+
+To grab the artifacts from the entire set of feeds:
+
+
+```bash
+edc feeds list | xargs -L 1 -I {} edc feed {} s3restore
+```
 
 
 
