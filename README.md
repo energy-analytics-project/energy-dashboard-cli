@@ -14,11 +14,27 @@ sudo apt install build-essential
 sudo apt install git
 ```
 
-### Install git-lfs
+### Install git-lfs (git large file store)
 
-https://git-lfs.github.com/
+*git-lfs* is used for storing the database files, which are basically binary blobs
+that are updated periodically. Rather than store all the db blob revisions in the 
+git repository, which would bloat it considerably, the db blobs are offloaded
+to git-lfs.
+
+For installation instructions, go here:
+
+* https://git-lfs.github.com/
 
 ### Install conda/anaconda
+
+You don't strictly _need_ anaconda for this toolchain to work. If you prefer
+mucking with python virtualenv directly, then go for it. I find that anaconda
+works really well with other parts of this toolchain, namely Jupyter Notebooks. 
+All the examples and documentation will assume you are using anaconda.
+
+Example, see the website for current instructions:
+
+* https://www.anaconda.com/distribution/#download-section
 
 ```bash
 wget https://repo.anaconda.com/archive/Anaconda3-2019.07-Linux-x86_64.sh
@@ -28,16 +44,33 @@ chmod +x Anaconda3-2019.07-Linux-x86_64.sh
 
 ## Installation
 
-See: https://geohackweek.github.io/Introductory/01-conda-tutorial/
+This webpage has a great tutorial on how to use conda. It's what I use
+when I forget the commands and concepts:
+
+* https://geohackweek.github.io/Introductory/01-conda-tutorial/
+
+Create a conda environment and then install the energy-dashboard-client. Note, the
+conda environment can be named anything...
 
 ```bash
 conda update conda
-conda create -n edc python=3 numpy jupyter pandas
-conda activate edc
+conda create -n edc-cli python=3 numpy jupyter pandas
+conda activate edc-cli
 pip install energy-dashboard-client
 ```
 
 ## Setup
+
+The energy-dashboard-client has two commands to get you up and running with an
+energy-dashboard:
+
+* clone : this will literally use git to clone the energy-dashboard repo to your local machine
+* update : this will pull down all the submodules to your local machine
+
+Note: if you only want a subset of the submodules installed on your local machine, then you
+can use the `git submodule deinit data/[name-of-submodule-to-remove]`.
+
+As always, let me know if you need better tooling around this or any other aspect of this project.
 
 ```bash
 mkdir foo
@@ -47,7 +80,26 @@ cd energy-dashboard
 edc update
 ```
 
-At this point you should have a working environment.
+At this point you should have a working environment:
+
+```
+foo/energy-dashboard/data/[...about ~91 submodules here ...]
+```
+
+## Use Cases
+
+### Create Jupyter Notebook
+
+TODO
+
+### Process Data Feeds
+
+
+
+### Add New Data Feed
+
+TODO
+
 
 
 ## Show Help
