@@ -2,7 +2,12 @@
 
 Command Line Interface for the Energy Dashboard.
 
-Still a WIP...
+!!!PRE-ALPHA!!!
+
+While this is the master branch, this project is not released yet. Stand by...
+
+All examples commands, install, etc. assume a linux (ubuntu) installation
+and use the `apt` package manager, etc.
 
 ## Prerequisites
 
@@ -25,6 +30,12 @@ For installation instructions, go here:
 
 * https://git-lfs.github.com/
 
+Example:
+
+```bash
+curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash
+```
+
 ### Install conda/anaconda
 
 You don't strictly _need_ anaconda for this toolchain to work. If you prefer
@@ -35,6 +46,8 @@ All the examples and documentation will assume you are using anaconda.
 Example, see the website for current instructions:
 
 * https://www.anaconda.com/distribution/#download-section
+
+Example:
 
 ```bash
 wget https://repo.anaconda.com/archive/Anaconda3-2019.07-Linux-x86_64.sh
@@ -49,15 +62,21 @@ when I forget the commands and concepts:
 
 * https://geohackweek.github.io/Introductory/01-conda-tutorial/
 
-Create a conda environment and then install the energy-dashboard-client. Note, the
-conda environment can be named anything...
+First, create a conda environment, it can be named anything, I'll call
+this `edc-cli`:
 
 ```bash
 conda update conda
 conda create -n edc-cli python=3 numpy jupyter pandas
 conda activate edc-cli
+```
+
+Then install the energy-dashboard-client:
+
+```bash
 pip install energy-dashboard-client
 ```
+
 
 ## Setup
 
