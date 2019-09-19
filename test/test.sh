@@ -1,5 +1,5 @@
 EDDIR=/mnt/PASSPORT/data/eap/energy-dashboard
-LOGLEVEL=INFO
+LOGLEVEL=DEBUG
 PREFIX="--log-level ${LOGLEVEL}"
 TESTFEED="abc-test-01"
 #set -x

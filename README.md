@@ -14,10 +14,11 @@ and use the `apt` package manager, etc.
 ### Install basic deps
 
 ```bash
-sudo apt install parallel
-sudo apt install build-essential
-sudo apt install git
+sudo apt install parallel build-essential git
 ```
+
+Note: rclone is not really necessary for most users. The s3restore command uses
+the python 'requests' to pull down artifacts from S3 type repositories. Project 
 
 ### Install git-lfs (git large file store)
 
@@ -698,6 +699,20 @@ Then, we check the databases...
 
 TODO
 
+
+### Maintainers
+
+Maintainers will need to install 'rclone' in addition to the stuff mentioned above.
+
+```bash
+sudo apt install rclone 
+```
+
+'rclone' is necessary for project maintainers that need to upload resources to
+s3 buckets. For users that just want to use the databases, git-lfs is all you
+need.  For those users that want the original and intermediate artifacts such
+as .zip, .xml, and .sql files, the python 'requests module' is all you need,
+and that's included with the installation of the energy-dashboard-client.
 
 ### Add New Data Feed
 
