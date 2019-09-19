@@ -682,9 +682,21 @@ First, we unzip...
 edc feeds list | parallel --max-procs 70% "edc feed {} proc unzip"
 ```
 
+Then, we parse...
 
+```bash
+edc feeds list | parallel --max-procs 80% "edc feed {} proc parse"
+```
 
+Then, we insert...
 
+```bash
+edc feeds list | parallel --max-procs 80% "edc feed {} proc insert"
+```
+
+Then, we check the databases...
+
+TODO
 
 
 ### Add New Data Feed
