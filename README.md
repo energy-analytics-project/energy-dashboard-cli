@@ -2,30 +2,38 @@
 
 Command Line Interface for the Energy Dashboard.
 
-!!!PRE-ALPHA!!!
+Status : PRE ALPHA
+* Stages
+    * download  : done
+    * parse     : done
+    * insert    : inproc (mostly working, need to test)
+    * notebook  : not yet started
 
-While this is the master branch, this project is not released yet. Stand by...
-
-All examples commands, install, etc. assume a linux (ubuntu) installation
-and use the `apt` package manager, etc.
+* While this is the master branch, this project is not ready for public
+  consumption. Stand by...
+* All examples commands, install, etc. assume a linux (ubuntu) installation and
+  use the `apt` package manager, etc.
 
 ## Prerequisites
 
 ### Install basic deps
 
+It's probably enough to just have 'git':
+
 ```bash
 sudo apt install parallel build-essential git
 ```
 
-Note: rclone is not really necessary for most users. The s3restore command uses
-the python 'requests' to pull down artifacts from S3 type repositories. Project 
+Advanced users will want more:
+
+```bash
+sudo apt install parallel rclone build-essential git
+```
 
 ### Install git-lfs (git large file store)
 
 *git-lfs* is used for storing the database files, which are basically binary blobs
-that are updated periodically. Rather than store all the db blob revisions in the 
-git repository, which would bloat it considerably, the db blobs are offloaded
-to git-lfs.
+that are updated periodically. Database blob revisions are offloaded to git-lfs.
 
 For installation instructions, go here:
 
@@ -63,6 +71,8 @@ when I forget the commands and concepts:
 
 * https://geohackweek.github.io/Introductory/01-conda-tutorial/
 
+### Environment
+
 First, create a conda environment, it can be named anything, I'll call
 this `edc-cli`:
 
@@ -71,6 +81,8 @@ conda update conda
 conda create -n edc-cli python=3 numpy jupyter pandas
 conda activate edc-cli
 ```
+
+### Client
 
 Then install the energy-dashboard-client:
 
@@ -92,6 +104,8 @@ can use the `git submodule deinit data/[name-of-submodule-to-remove]`.
 
 As always, let me know if you need better tooling around this or any other aspect of this project.
 
+### Clone and Update
+
 ```bash
 mkdir foo
 cd foo
@@ -99,6 +113,8 @@ edc clone
 cd energy-dashboard
 edc update
 ```
+
+### Verify Setup
 
 At this point you should have a working environment:
 
@@ -197,11 +213,19 @@ have not yet sorted out how to deal with that. More on this later.
 
 ### Create Jupyter Notebook
 
-TODO
+TODO : This is what most of the users of this project want to do.
 
-This is what most of the users of this project want to do.
+The code to automatically generate jupyter notebooks has not been written yet, but
+it's essentially two things:
 
-### Process Data Feeds
+* look at the generated database and the tables in that database (or the .sql files)
+* use Jinja2 templating to emit a Jupyter Notebook with the Pandas queries wired in
+
+While the code to _automatically_ generate this hasn't been written yet, you can
+always write your own Jupyter Notebook and manualy specify the database and 
+queries... just look at the samples in the energy-dashboard/notebooks directory.
+
+### Curate Data Feeds
 
 At a high level, a data feed is simply a url and some instructions for processing
 it. The url is stored in the `manifest.json`, and the processing instructions
@@ -210,23 +234,81 @@ that handle downloading, parsing, constructing sql insert statements, and insert
 the data into a sqlite3 database. See the section on `Add New Data Feed` for more
 details on the construction of a data feed.
 
-Data feeds are processed in stages, and you can think of this as a vertical to
-horizontal processing.
+#### Pipeline
 
-Horizontally, the process is very simple, we move from downloading a resource
-through the stages until we insert the records into a database. The DATABASE 
-is the final product.
+Data feeds are processed in stages. 
+
+##### Stages 
+
+Data moves horizontally across the stages, starting with `download` and winding up
+with a database as the final artifact.
+
+Here are the typical stages:
 
 ```bash
-DOWNLOAD -> EXTRACT -> PARSE -> SQL -> INSERT -> *DATABASE*
+DOWNLOAD -> UNZIP -> PARSE -> INSERT -> SAVE
 ```
 
-Vertically, the process is also very simple. Each stage processes all the artifacts
-from the previous stage. However, we need this to be robust and re-startable. No idea
-if that's a word, but it's a real thing. Machines crash, or you may need to stop
-for some reason. I've also had the case where I had an error in the logic in a given
-stage, and needed to start over from scratch. How do we do this here? Easy. A `state`
-file:
+These stages are represented by bi the edc `proc` commands: `download | unzip |
+parse | insert | save`. Each `proc` command processes the artifacts in the
+previous stage into it's stage.
+
+###### Download
+
+The `download` command looks at the current date/time, generates a list of urls
+with start and end dates, and downloads all these artifacts into the `./zip`
+directory. The ./zip/state.txt file is updated with the urls of the downloaded
+artifacts.
+
+```bash
+edc feed some-feed-named-foo proc download
+```
+
+###### Unzip
+
+The `unzip` stage extracts `./zip` files from the downloaded artifacts into the
+`./xml` directory. The ./xml/state.txt file is updated with the name of the zip 
+file that was unzipped.
+
+```bash
+edc feed some-feed-named-foo proc unzip
+```
+
+###### Parse
+
+The `parse` stage reads the xml files from `./xml` and writes out sql
+statements to the `./sql` directory. The ./sql/state.txt file is updated with
+the name of the xml file that was parsed.
+
+```bash
+edc feed some-feed-named-foo proc parse
+```
+
+###### Insert
+
+The `insert` stage reads the sql files from `./sql` and creates a database
+and inserts the records into that database in the `./db` directory. The ./db/state.txt
+file is updated with the name of the sql file that was inserted.
+
+```bash
+edc feed some-feed-named-foo proc insert
+```
+
+###### Save
+
+The `save` stage invokes git to save the repository.
+
+
+```bash
+edc feed some-feed-named-foo proc insert
+```
+
+
+Note, that this procesing needs to be able to be re-started and continued, or
+reset and started-from-scratch. That's what the state.txt files are for.
+
+
+###### State Files
 
 ```bash
 DOWNLOAD        -> EXTRACT     -> PARSE SQL     -> INSERT       -> *DATABASE*
@@ -252,12 +334,6 @@ Here's the command that does this for you:
 
 ```bash
 edc feed [feed name] reset [stage]
-```
-
-And to process a given stage:
-
-```bash
-edc feed [feed name] proc [stage]
 ```
 
 Here's the scenario. I've been writing the code for this project on my laptop. But it does
