@@ -27,7 +27,7 @@ runcmd_ignore_errors(){
 
 #TEMPDIR=$(mktemp -d)
 #pushd ${TEMPDIR}
-mkdir ./data
+#mkdir ./data
 runcmd pwd
 runcmd "edc"
 runcmd "edc --help"
@@ -37,13 +37,16 @@ runcmd "edc ${PREFIX} feeds"
 runcmd "edc ${PREFIX} feeds list"
 runcmd "edc ${PREFIX} feed"
 # may run against already created feed for speed
-#runcmd_ignore_errors "edc ${PREFIX} feed ${TESTFEED} create -sdy 2019 -sdm 9 -sdd 1 --url=http://zwrob.com/assets/oasis_SZ_q_AS_MILEAGE_CALC_anc_type_ALL_sdt__START_T07_00-0000_edt__END_T07_00-0000_v_1.zip"
-runcmd "edc ${PREFIX} feed ${TESTFEED} create -sdy 2019 -sdm 9 -sdd 1 --url=http://zwrob.com/assets/oasis_SZ_q_AS_MILEAGE_CALC_anc_type_ALL_sdt__START_T07_00-0000_edt__END_T07_00-0000_v_1.zip"
+runcmd_ignore_errors "edc ${PREFIX} feed ${TESTFEED} create -sdy 2019 -sdm 9 -sdd 1 --url=http://zwrob.com/assets/oasis_SZ_q_AS_MILEAGE_CALC_anc_type_ALL_sdt__START_T07_00-0000_edt__END_T07_00-0000_v_1.zip"
+#runcmd "edc ${PREFIX} feed ${TESTFEED} create -sdy 2019 -sdm 9 -sdd 1 --url=http://zwrob.com/assets/oasis_SZ_q_AS_MILEAGE_CALC_anc_type_ALL_sdt__START_T07_00-0000_edt__END_T07_00-0000_v_1.zip"
 runcmd "edc ${PREFIX} feed ${TESTFEED} manifest show"
 runcmd "edc ${PREFIX} feed ${TESTFEED} invoke \"ls\""
 runcmd "edc ${PREFIX} feed ${TESTFEED} status --header"
 # if takes too long to download, comment out. TODO: need to fix test
-runcmd "edc ${PREFIX} feed ${TESTFEED} proc download"
+#runcmd "edc ${PREFIX} feed ${TESTFEED} proc download"
+runcmd "edc ${PREFIX} feed ${TESTFEED} reset unzip --no-confirm"
+runcmd "edc ${PREFIX} feed ${TESTFEED} reset parse --no-confirm"
+runcmd "edc ${PREFIX} feed ${TESTFEED} reset insert --no-confirm"
 runcmd "edc ${PREFIX} feed ${TESTFEED} proc unzip"
 runcmd "edc ${PREFIX} feed ${TESTFEED} proc parse"
 runcmd "edc ${PREFIX} feed ${TESTFEED} proc insert"
