@@ -27,6 +27,7 @@ runcmd_ignore_errors(){
 
 #TEMPDIR=$(mktemp -d)
 #pushd ${TEMPDIR}
+rm -rf ./data
 mkdir ./data
 runcmd pwd
 runcmd "edc"
