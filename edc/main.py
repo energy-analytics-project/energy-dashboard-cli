@@ -25,6 +25,7 @@ import click
 import os
 import sys
 import logging
+import copy
 
 # CTX OBJ KEYS
 EDDIR           ='eddir'
@@ -290,8 +291,7 @@ def feed_reset(ctx, stage, confirm):
     Stages are: ['download', 'unzip', 'parse', 'insert']
 
     """
-
-    stage = filter_input_to_stage(stage)
+    stage = filter_input_to_stage(['download', 'unzip', 'parse', 'insert'] , stage)
 
     feed    = ctx.obj[FEED]
     path    = ctx.obj[EDDIR]
@@ -344,8 +344,9 @@ def feed_procstage(ctx, stage):
     Stages are: ['download', 'unzip', 'parse', 'insert', 'save', 'all']
 
     """
-
-    stage = filter_input_to_stage(stage, ["all"])
+    procstages = copy.copy(clifeed.STAGES)
+    procstages.extend(['all'])
+    stage = filter_input_to_stage(procstages, stage)
     feed    = ctx.obj[FEED]
     path    = ctx.obj[EDDIR]
     logger  = ctx.obj[LOGGER]
@@ -368,10 +369,13 @@ def feed_procfile(ctx, stage):
     Process a single file through the feed's stage procesing file in the './src' 
     directory.
 
-    Stages are: %s
+    Stages are: ['download', 'unzip', 'parse', 'insert', 'save', 'all']
 
-    """ % ["all"].extend(clifeed.STAGES)
-    stage = filter_input_to_stage(stage, ["all"])
+    """
+
+    procstages = copy.copy(clifeed.STAGES)
+    procstages.extend(['all'])
+    stage = filter_input_to_stage(procstages, stage)
     feed    = ctx.obj[FEED]
     path    = ctx.obj[EDDIR]
     logger  = ctx.obj[LOGGER]
@@ -395,17 +399,33 @@ def feed_archive_to_s3(ctx, service, operation):
 
 
 @feed.command('s3restore', short_help='Restore feed zip files from from S3 bucket')
+@click.argument('stage')
 @click.option('--service', '-s', type=click.Choice(['wasabi', 'digitalocean',]), default='wasabi')
 @click.pass_context
-def feed_restore_from_s3(ctx, service):
+def feed_restore_from_s3(ctx, stage, service):
     """
     Copy S3 bucket zip files to feed dir.
+
+    Stages are: ['download', 'unzip', 'parse', 'insert', 'all']
     """
-    feed    = ctx.obj[FEED]
-    path    = ctx.obj[EDDIR]
-    logger  = ctx.obj[LOGGER]
-    for output in clifeed.restore_from_s3(logger, feed, path, service):
-        click.echo(output)
+    feed            = ctx.obj[FEED]
+    path            = ctx.obj[EDDIR]
+    logger          = ctx.obj[LOGGER]
+
+    basic_stages    = ['download', 'unzip', 'parse', 'insert']
+    restore_stages  = copy.copy(basic_stages)
+    restore_stages.extend(['all'])
+    stage           = filter_input_to_stage(restore_stages, stage)
+
+    def do_restore(stage):
+        for output in clifeed.restore_from_s3(logger, feed, path, service, stage):
+            click.echo(output)
+
+    if stage == 'all':
+        for s in basic_stages:
+            do_restore(stage)
+    else:
+        do_restore(stage)
 
 #------------------------------------------------------------------------------
 # Feed.Manifest (singular)
@@ -517,12 +537,13 @@ def feed_manifest_update(ctx, field, value_str, value_int):
     logger  = ctx.obj[LOGGER]
     clifeed.manifest_update(logger, feed, path, field, value_str, value_int)
 
-def filter_input_to_stage(stage_input, additional_stages=[]):
-    stages = clifeed.STAGES
-    stages.extend(additional_stages)
-    for s in clifeed.STAGES:
-        if s.startswith(stage_input):
-            return s
-    click.echo("ERROR: stage argument must be (or start with letters from) one of these stages: %s" % clifeed.STAGES)
+def filter_input_to_stage(stages, s):
+    """
+    Typically stages = clifeed.STAGES, and 's' is a particular stage
+    """
+    for stage in clifeed.STAGES:
+        if stage.startswith(s):
+            return stage
+    click.echo("ERROR: stage argument must be (or start with letters from) one of these stages: %s" % stages)
     sys.exit(-1)
 

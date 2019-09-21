@@ -1,5 +1,6 @@
 EDDIR=/mnt/PASSPORT/data/eap/energy-dashboard
-LOGLEVEL=INFO
+#LOGLEVEL=INFO
+LOGLEVEL=DEBUG
 PREFIX="--log-level ${LOGLEVEL}"
 TESTFEED="abc-test-01"
 #set -x
@@ -51,6 +52,11 @@ runcmd "edc ${PREFIX} feed ${TESTFEED} proc insert"
 runcmd_ignore_errors "edc ${PREFIX} feed ${TESTFEED} proc save"
 runcmd "edc ${PREFIX} feed ${TESTFEED} status --header"
 runcmd "edc ${PREFIX} feed ${TESTFEED} archive"
+runcmd "edc ${PREFIX} feed ${TESTFEED} s3archive"
+runcmd "edc ${PREFIX} feed ${TESTFEED} reset insert --no-confirm"
+runcmd "edc ${PREFIX} feed ${TESTFEED} status --header"
+runcmd "edc ${PREFIX} feed ${TESTFEED} s3restore insert"
+runcmd "edc ${PREFIX} feed ${TESTFEED} status --header"
 #popd
 #runcmd "edc ${PREFIX} feed ${TESTFEED} reset parse"
 

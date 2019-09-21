@@ -1,14 +1,17 @@
 EDDIR=/mnt/PASSPORT/data/eap/energy-dashboard
-LOGLEVEL=INFO
+#LOGLEVEL=INFO
+LOGLEVEL=DEBUG
 PREFIX="--log-level ${LOGLEVEL}"
 TESTFEED="abc-test-01"
+RESULT=""
 #set -x
 
 runcmd(){
     echo "-------------------------------------------------"
     echo $1
     echo "-------------------------------------------------"
-    $1
+    RESULT="$($1)"
+    echo "${RESULT}"
     if [ "$?" != "0" ]; then
         echo "TEST FAILED!!!"
         exit 1
@@ -21,6 +24,8 @@ runcmd_ignore_errors(){
     echo "-------------------------------------------------"
     echo $1
     echo "-------------------------------------------------"
+    RESULT="$($1)"
+    echo "${RESULT}"
     echo ""
     echo ""
 }
@@ -53,6 +58,16 @@ runcmd "edc ${PREFIX} feed ${TESTFEED} proc insert"
 runcmd_ignore_errors "edc ${PREFIX} feed ${TESTFEED} proc save"
 runcmd "edc ${PREFIX} feed ${TESTFEED} status --header"
 runcmd "edc ${PREFIX} feed ${TESTFEED} archive"
+ARCHIVE=${RESULT}
+runcmd "edc ${PREFIX} feed ${TESTFEED} reset unzip --no-confirm"
+runcmd "edc ${PREFIX} feed ${TESTFEED} status --header"
+runcmd "edc ${PREFIX} feed ${TESTFEED} restore ${ARCHIVE}"
+runcmd "edc ${PREFIX} feed ${TESTFEED} status --header"
+runcmd "edc ${PREFIX} feed ${TESTFEED} s3archive"
+runcmd "edc ${PREFIX} feed ${TESTFEED} reset insert --no-confirm"
+runcmd "edc ${PREFIX} feed ${TESTFEED} status --header"
+runcmd "edc ${PREFIX} feed ${TESTFEED} s3restore insert"
+runcmd "edc ${PREFIX} feed ${TESTFEED} status --header"
 #popd
 #runcmd "edc ${PREFIX} feed ${TESTFEED} reset parse"
 
