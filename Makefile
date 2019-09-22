@@ -50,14 +50,25 @@ setup:
 	echo "$ conda activate eap-dev"
 
 .PHONY: build
-build: 
+build:
 	python3 setup.py sdist bdist_wheel
 
 
 .PHONY: test-publish
-test-publish: 
+test-publish:
 	twine upload --repository testpypi dist/*
 
 .PHONY: prod-publish
 prod-publish: clean build
 	twine upload --repository pypi dist/*
+
+.PHONY: test-publish
+test-publish:
+	twine upload --repository testpypi dist/*
+
+.PHONY: prod-publish
+prod-publish: clean build
+	twine upload --repository pypi dist/*
+
+.PHONY: pub
+pub: prod-publish

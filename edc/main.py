@@ -541,9 +541,8 @@ def filter_input_to_stage(stages, s):
     """
     Typically stages = clifeed.STAGES, and 's' is a particular stage
     """
-    for stage in clifeed.STAGES:
+    for stage in stages:
         if stage.startswith(s):
             return stage
     click.echo("ERROR: stage argument must be (or start with letters from) one of these stages: %s" % stages)
     sys.exit(-1)
-
