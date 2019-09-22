@@ -1,6 +1,6 @@
 EDDIR=/mnt/PASSPORT/data/eap/energy-dashboard
-#LOGLEVEL=INFO
-LOGLEVEL=DEBUG
+LOGLEVEL=INFO
+#LOGLEVEL=DEBUG
 PREFIX="--log-level ${LOGLEVEL}"
 TESTFEED="abc-test-01"
 RESULT=""
@@ -41,9 +41,7 @@ runcmd "edc ${PREFIX} license"
 runcmd "edc ${PREFIX} feeds"
 runcmd "edc ${PREFIX} feeds list"
 runcmd "edc ${PREFIX} feed"
-# may run against already created feed for speed
-runcmd_ignore_errors "edc ${PREFIX} feed ${TESTFEED} create -sdy 2019 -sdm 9 -sdd 1 --url=http://zwrob.com/assets/oasis_SZ_q_AS_MILEAGE_CALC_anc_type_ALL_sdt__START_T07_00-0000_edt__END_T07_00-0000_v_1.zip"
-#runcmd "edc ${PREFIX} feed ${TESTFEED} create -sdy 2019 -sdm 9 -sdd 1 --url=http://zwrob.com/assets/oasis_SZ_q_AS_MILEAGE_CALC_anc_type_ALL_sdt__START_T07_00-0000_edt__END_T07_00-0000_v_1.zip"
+# run against already created feed for speed
 runcmd "edc ${PREFIX} feed ${TESTFEED} manifest show"
 runcmd "edc ${PREFIX} feed ${TESTFEED} invoke \"ls\""
 runcmd "edc ${PREFIX} feed ${TESTFEED} status --header"
