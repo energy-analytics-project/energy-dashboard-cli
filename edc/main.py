@@ -398,13 +398,13 @@ def feed_archive_to_s3(ctx, service, operation):
         click.echo(output)
 
 
-@feed.command('s3restore', short_help='Restore feed zip files from from S3 bucket')
+@feed.command('s3restore', short_help='Restore feed from from S3 bucket')
 @click.argument('stage')
 @click.option('--service', '-s', type=click.Choice(['wasabi', 'digitalocean',]), default='wasabi')
 @click.pass_context
 def feed_restore_from_s3(ctx, stage, service):
     """
-    Copy S3 bucket zip files to feed dir.
+    Copy S3 bucket files for given stage:
 
     Stages are: ['download', 'unzip', 'parse', 'insert', 'all']
     """
