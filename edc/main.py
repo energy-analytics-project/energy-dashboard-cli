@@ -385,7 +385,6 @@ def feed_procfile(ctx, stage):
 
 @feed.command('s3archive', short_help='Archive feed to S3 bucket')
 @click.option('--service', '-s', type=click.Choice(['wasabi', 'digitalocean',]), default='wasabi')
-@click.option('--operation', '-o', '-s', type=click.Choice(['copy', 'sync']), default='copy')
 @click.pass_context
 def feed_archive_to_s3(ctx, service, operation):
     """
@@ -394,7 +393,7 @@ def feed_archive_to_s3(ctx, service, operation):
     feed    = ctx.obj[FEED]
     path    = ctx.obj[EDDIR]
     logger  = ctx.obj[LOGGER]
-    for output in clifeed.archive_to_s3(logger, feed, path, serviceoperation):
+    for output in clifeed.archive_to_s3(logger, feed, path, service):
         click.echo(output)
 
 
