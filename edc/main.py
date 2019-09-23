@@ -394,38 +394,42 @@ def feed_archive_to_s3(ctx, service, operation):
     feed    = ctx.obj[FEED]
     path    = ctx.obj[EDDIR]
     logger  = ctx.obj[LOGGER]
-    for output in clifeed.archive_to_s3(logger, feed, path, service, operation):
+    for output in clifeed.archive_to_s3(logger, feed, path, serviceoperation):
         click.echo(output)
 
 
 @feed.command('s3restore', short_help='Restore feed from from S3 bucket')
-@click.argument('stage')
 @click.option('--service', '-s', type=click.Choice(['wasabi', 'digitalocean',]), default='wasabi')
 @click.pass_context
 def feed_restore_from_s3(ctx, stage, service):
     """
-    Copy S3 bucket files for given stage:
+    Restore from dist files on S3:
 
-    Stages are: ['download', 'unzip', 'parse', 'insert', 'all']
+        [s3]/zip/*.zip      -> [feed]/zip/*.zip
+        [s3]/db/*.db.7z     -> [feed]/db/*.db   (decompresses after file transfer)
+        
     """
     feed            = ctx.obj[FEED]
     path            = ctx.obj[EDDIR]
     logger          = ctx.obj[LOGGER]
 
-    basic_stages    = ['download', 'unzip', 'parse', 'insert']
-    restore_stages  = copy.copy(basic_stages)
-    restore_stages.extend(['all'])
-    stage           = filter_input_to_stage(restore_stages, stage)
+    for output in clifeed.restore_from_s3(logger, feed, path, service):
+        for output2 in output:
+            click.echo(output2)
 
-    def do_restore(stage):
-        for output in clifeed.restore_from_s3(logger, feed, path, service, stage):
-            click.echo(output)
+@feed.command('s3urls', short_help='Urls to download artifacts from S3 bucket')
+@click.option('--service', '-s', type=click.Choice(['wasabi', 'digitalocean',]), default='wasabi')
+@click.pass_context
+def feed_restore_from_s3(ctx, stage, service):
+    """
+    Urls to download artifacts from S3 bucket
+    """
+    feed            = ctx.obj[FEED]
+    path            = ctx.obj[EDDIR]
+    logger          = ctx.obj[LOGGER]
 
-    if stage == 'all':
-        for s in basic_stages:
-            do_restore(stage)
-    else:
-        do_restore(stage)
+    for (url, target) in clifeed.s3_artifact_urls(logger, feed, path, service):
+        click.echo(url)
 
 #------------------------------------------------------------------------------
 # Feed.Manifest (singular)

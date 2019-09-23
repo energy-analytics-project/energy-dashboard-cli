@@ -18,16 +18,9 @@ Status : PRE ALPHA
 
 ### Install basic deps
 
-It's probably enough to just have 'git':
 
 ```bash
-sudo apt install parallel build-essential git
-```
-
-Advanced users will want more:
-
-```bash
-sudo apt install parallel rclone build-essential git
+sudo apt install parallel rclone build-essential git p7zip-full
 ```
 
 ### Install git-lfs (git large file store)
