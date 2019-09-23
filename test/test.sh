@@ -18,6 +18,19 @@ runcmd(){
     echo ""
 }
 
+runcmd_should_fail(){
+    echo "-------------------------------------------------"
+    echo $1
+    echo "-------------------------------------------------"
+    $1
+    if [ "$?" != "1" ]; then
+        echo "TEST FAILED (SHOULD HAVE SYS.EXITED==1) !!!"
+        exit 1
+    fi
+    echo ""
+    echo ""
+}
+
 runcmd_ignore_errors(){
     echo "-------------------------------------------------"
     echo $1
@@ -30,6 +43,7 @@ runcmd_ignore_errors(){
 runcmd_ignore_errors "edc ${PREFIX} feed ${TESTFEED} proc all"
 runcmd "edc ${PREFIX} feed ${TESTFEED} s3urls"
 runcmd "edc ${PREFIX} feed ${TESTFEED} reset dist --no-confirm"
+runcmd_should_fail "edc ${PREFIX} feed ${TESTFEED} s3archive"
 runcmd "edc ${PREFIX} feed ${TESTFEED} proc dist"
 runcmd "edc ${PREFIX} feed ${TESTFEED} s3archive"
 runcmd "edc ${PREFIX} feed ${TESTFEED} status --header"
