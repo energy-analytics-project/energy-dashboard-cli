@@ -45,12 +45,16 @@ runcmd "edc ${PREFIX} feed ${TESTFEED} s3urls"
 runcmd "edc ${PREFIX} feed ${TESTFEED} reset dist --no-confirm"
 runcmd_should_fail "edc ${PREFIX} feed ${TESTFEED} s3archive"
 runcmd "edc ${PREFIX} feed ${TESTFEED} proc dist"
-runcmd "edc ${PREFIX} feed ${TESTFEED} s3archive"
+find data/${TESTFEED}/dist
+runcmd "edc ${PREFIX} feed ${TESTFEED} status --header"
+runcmd "edc ${PREFIX} feed ${TESTFEED} proc arch"
+find data/${TESTFEED}/dist
 runcmd "edc ${PREFIX} feed ${TESTFEED} status --header"
 # need the state files to use s3restore, so don't delete them
 rm -rf ./data/${TESTFEED}/db/*.db
 rm -rf ./data/${TESTFEED}/zip/*.zip
 runcmd "edc ${PREFIX} feed ${TESTFEED} s3restore"
 runcmd "edc ${PREFIX} feed ${TESTFEED} status --header"
-
+# final check that everything works
+runcmd "edc ${PREFIX} feed ${TESTFEED} proc all"
 echo "TEST PASSED"
