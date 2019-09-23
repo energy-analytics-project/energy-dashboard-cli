@@ -48,7 +48,7 @@ runcmd "edc ${PREFIX} feed ${TESTFEED} status --header"
 
 # no need to download, that code is simple and slows down tests
 # runcmd "edc ${PREFIX} feed ${TESTFEED} proc download"
-mkdirs -p ./data/${TESTFEED}/zip
+mkdir -p ./data/${TESTFEED}/zip
 cp -rv testdata/zip/* ./data/${TESTFEED}/zip/.
 
 runcmd "edc ${PREFIX} feed ${TESTFEED} reset unzip --no-confirm"
