@@ -29,6 +29,7 @@ runcmd_ignore_errors(){
 ./qtest.sh
 runcmd_ignore_errors "edc ${PREFIX} feed ${TESTFEED} proc all"
 runcmd "edc ${PREFIX} feed ${TESTFEED} s3urls"
+runcmd "edc ${PREFIX} feed ${TESTFEED} reset dist --no-confirm"
 runcmd "edc ${PREFIX} feed ${TESTFEED} proc dist"
 runcmd "edc ${PREFIX} feed ${TESTFEED} s3archive"
 runcmd "edc ${PREFIX} feed ${TESTFEED} status --header"

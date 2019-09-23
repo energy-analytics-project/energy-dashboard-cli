@@ -288,10 +288,10 @@ def feed_reset(ctx, stage, confirm):
 
     !!!USE WITH CAUTION!!!
 
-    Stages are: ['download', 'unzip', 'parse', 'insert']
+    Stages are: ['download', 'unzip', 'parse', 'insert', 'dist']
 
     """
-    stage = filter_input_to_stage(['download', 'unzip', 'parse', 'insert'] , stage)
+    stage = filter_input_to_stage(['download', 'unzip', 'parse', 'insert', 'dist'] , stage)
 
     feed    = ctx.obj[FEED]
     path    = ctx.obj[EDDIR]
@@ -341,7 +341,7 @@ def feed_procstage(ctx, stage):
     Process the feed through the stage procesing files in the './src' 
     directory, in lexical order.
 
-    Stages are: ['download', 'unzip', 'parse', 'insert', 'save', 'all']
+    Stages are: ['download', 'unzip', 'parse', 'insert', 'save', 'dist', 'all']
 
     """
     procstages = copy.copy(clifeed.STAGES)
