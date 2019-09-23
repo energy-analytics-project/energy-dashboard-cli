@@ -32,5 +32,8 @@ runcmd "edc ${PREFIX} feed ${TESTFEED} s3urls"
 runcmd "edc ${PREFIX} feed ${TESTFEED} proc dist"
 runcmd "edc ${PREFIX} feed ${TESTFEED} s3archive"
 runcmd "edc ${PREFIX} feed ${TESTFEED} status --header"
+rm -rf ./data/${TESTFEED}
+runcmd "edc ${PREFIX} feed ${TESTFEED} s3restore"
+runcmd "edc ${PREFIX} feed ${TESTFEED} status --header"
 
 echo "TEST PASSED"

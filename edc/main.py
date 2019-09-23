@@ -413,8 +413,7 @@ def feed_restore_from_s3(ctx, service):
     logger          = ctx.obj[LOGGER]
 
     for output in clifeed.restore_from_s3(logger, feed, path, service):
-        for output2 in output:
-            click.echo(output2)
+        click.echo(output)
 
 @feed.command('s3urls', short_help='Urls to download artifacts from S3 bucket')
 @click.option('--service', '-s', type=click.Choice(['wasabi', 'digitalocean',]), default='wasabi')
