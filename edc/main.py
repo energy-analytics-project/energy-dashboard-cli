@@ -386,7 +386,7 @@ def feed_procfile(ctx, stage):
 @feed.command('s3archive', short_help='Archive feed to S3 bucket')
 @click.option('--service', '-s', type=click.Choice(['wasabi', 'digitalocean',]), default='wasabi')
 @click.pass_context
-def feed_archive_to_s3(ctx, service, operation):
+def feed_archive_to_s3(ctx, service):
     """
     Archive feed to an S3 bucket.
     """
