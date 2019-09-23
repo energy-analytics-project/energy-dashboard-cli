@@ -401,7 +401,7 @@ def feed_archive_to_s3(ctx, service, operation):
 @feed.command('s3restore', short_help='Restore feed from from S3 bucket')
 @click.option('--service', '-s', type=click.Choice(['wasabi', 'digitalocean',]), default='wasabi')
 @click.pass_context
-def feed_restore_from_s3(ctx, stage, service):
+def feed_restore_from_s3(ctx, service):
     """
     Restore from dist files on S3:
 
@@ -420,7 +420,7 @@ def feed_restore_from_s3(ctx, stage, service):
 @feed.command('s3urls', short_help='Urls to download artifacts from S3 bucket')
 @click.option('--service', '-s', type=click.Choice(['wasabi', 'digitalocean',]), default='wasabi')
 @click.pass_context
-def feed_restore_from_s3(ctx, stage, service):
+def feed_s3_urls(ctx, service):
     """
     Urls to download artifacts from S3 bucket
     """
