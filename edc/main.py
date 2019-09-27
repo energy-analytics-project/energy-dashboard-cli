@@ -275,10 +275,10 @@ def feed_status(ctx, separator, header):
         click.echo(line)
 
 @feed.command('reset', short_help='Reset feed stage')
-@click.argument('stage')
+@click.argument('stages', nargs=-1)
 @click.option('--confirm/--no-confirm', default=True)
 @click.pass_context
-def feed_reset(ctx, stage, confirm):
+def feed_reset(ctx, stages, confirm):
     """
     !!!USE WITH CAUTION!!!
 
@@ -291,17 +291,25 @@ def feed_reset(ctx, stage, confirm):
     Stages are: ['download', 'unzip', 'parse', 'insert', 'dist']
 
     """
-    stage = filter_input_to_stage(['download', 'unzip', 'parse', 'insert', 'dist'] , stage)
-
     feed    = ctx.obj[FEED]
     path    = ctx.obj[EDDIR]
     logger  = ctx.obj[LOGGER]
-    if confirm:
-        p = clifeed.pre_reset(logger, feed, path, stage)
-        if click.confirm('About to delete: %s. Do you want to continue?' % p):
+
+    valid_stages    = ['download', 'unzip', 'parse', 'insert', 'dist']
+    all_stages      = copy.copy(valid_stages)
+    all_stages.append('all')
+    vstages = [filter_input_to_stage(all_stages, stage) for stage in stages]
+
+    if 'all' in vstages:
+        vstages = valid_stages
+
+    for stage in vstages:
+        if confirm:
+            p = clifeed.pre_reset(logger, feed, path, stage)
+            if click.confirm('About to delete: %s. Do you want to continue?' % p):
+                click.echo(clifeed.reset(logger, feed, path, stage))
+        else:
             click.echo(clifeed.reset(logger, feed, path, stage))
-    else:
-        click.echo(clifeed.reset(logger, feed, path, stage))
 
 @feed.command('archive', short_help='Archive feed to tar.gz')
 @click.option('--archivedir', help="Path to save archive", required=False, default="archive")
@@ -334,52 +342,55 @@ def feed_restore_from_targz(ctx, archive):
 
 
 @feed.command('proc', short_help='Process a feed through the provided stage in ./src')
-@click.argument('stage')
+@click.argument('stages', nargs=-1)
 @click.pass_context
-def feed_procstage(ctx, stage):
+def feed_procstage(ctx, stages):
     """
-    Process the feed through the stage procesing files in the './src' 
-    directory, in lexical order.
+    Process the feed through the stages.
 
-    Stages are: ['download', 'unzip', 'parse', 'insert', 'save', 'dist', 'arch', 'all']
+    If stage is 'all' then all stages will be processed.
+
+    Otherwise the stage argument can be any combination of these stages:
+
+        ['download', 'unzip', 'parse', 'insert', 'save', 'dist', 'arch']
 
     """
-    procstages = copy.copy(clifeed.STAGES)
-    procstages.extend(['all'])
-    stage = filter_input_to_stage(procstages, stage)
     feed    = ctx.obj[FEED]
     path    = ctx.obj[EDDIR]
     logger  = ctx.obj[LOGGER]
-    if stage == "all":
-        for sout in clifeed.process_all_stages(logger, feed, path):
-            for output in sout:
-                for output2 in output:
-                    click.echo(output)
-    else:
-        for sout in clifeed.process_stages(logger, feed, path, [stage]):
-            for output in sout:
-                for output2 in output:
-                    click.echo(output)
 
-@feed.command('procfile', short_help='Process a file through the stages in ./src')
-@click.argument('stage')
-@click.pass_context
-def feed_procfile(ctx, stage):
-    """
-    Process a single file through the feed's stage procesing file in the './src' 
-    directory.
+    valid_stages = copy.copy(clifeed.STAGES)
+    all_stages = copy.copy(valid_stages)
+    all_stages.append('all')
+    vstages = [filter_input_to_stage(all_stages, stage) for stage in stages]
+    
+    if 'all' in vstages:
+        vstages = valid_stages
 
-    Stages are: ['download', 'unzip', 'parse', 'insert', 'save', 'all']
+    for sout in clifeed.process_stages(logger, feed, path, vstages):
+        for output in sout:
+            for output2 in output:
+                click.echo(output)
 
-    """
-
-    procstages = copy.copy(clifeed.STAGES)
-    procstages.extend(['all'])
-    stage = filter_input_to_stage(procstages, stage)
-    feed    = ctx.obj[FEED]
-    path    = ctx.obj[EDDIR]
-    logger  = ctx.obj[LOGGER]
-    # TODO: invoke a proc file on an individual input file accross the stages
+#@feed.command('procfile', short_help='Process a file through the stages in ./src')
+#@click.argument('stage')
+#@click.pass_context
+#def feed_procfile(ctx, stage):
+#    """
+#    Process a single file through the feed's stage procesing file in the './src' 
+#    directory.
+#
+#    Stages are: ['download', 'unzip', 'parse', 'insert', 'save', 'all']
+#
+#    """
+#
+#    procstages = copy.copy(clifeed.STAGES)
+#    procstages.extend(['all'])
+#    stage = filter_input_to_stage(procstages, stage)
+#    feed    = ctx.obj[FEED]
+#    path    = ctx.obj[EDDIR]
+#    logger  = ctx.obj[LOGGER]
+#    # TODO: invoke a proc file on an individual input file accross the stages
 
 
 
@@ -539,12 +550,12 @@ def feed_manifest_update(ctx, field, value_str, value_int):
     logger  = ctx.obj[LOGGER]
     clifeed.manifest_update(logger, feed, path, field, value_str, value_int)
 
-def filter_input_to_stage(stages, s):
+def filter_input_to_stage(valid_stages, s):
     """
     Typically stages = clifeed.STAGES, and 's' is a particular stage
     """
-    for stage in stages:
-        if stage.startswith(s):
-            return stage
+    for vstage in valid_stages:
+        if vstage.startswith(s):
+            return vstage
     click.echo("ERROR: stage argument must be (or start with letters from) one of these stages: %s" % stages)
     sys.exit(-1)
