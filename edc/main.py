@@ -557,5 +557,5 @@ def filter_input_to_stage(valid_stages, s):
     for vstage in valid_stages:
         if vstage.startswith(s):
             return vstage
-    click.echo("ERROR: stage argument must be (or start with letters from) one of these stages: %s" % stages)
-    sys.exit(-1)
+    click.echo("ERROR: invalid stage argument '%s'; stages must be (or start with letters from) one of these stages: %s" % (s, valid_stages))
+    sys.exit(1)

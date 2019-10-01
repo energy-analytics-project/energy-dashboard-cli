@@ -20,6 +20,20 @@ runcmd(){
     echo ""
 }
 
+runcmd_should_fail(){
+    echo "-------------------------------------------------"
+    echo $1
+    echo "-------------------------------------------------"
+    $1
+    if [ "$?" != "1" ]; then
+        echo "TEST FAILED (SHOULD HAVE SYS.EXITED==1) !!!"
+        exit 1
+    fi
+    echo ""
+    echo ""
+}
+
+
 runcmd_ignore_errors(){
     echo "-------------------------------------------------"
     echo $1
@@ -54,6 +68,8 @@ cp -rv testdata/zip/* ./data/${TESTFEED}/zip/.
 runcmd "edc ${PREFIX} feed ${TESTFEED} reset unzip --no-confirm"
 runcmd "edc ${PREFIX} feed ${TESTFEED} reset parse --no-confirm"
 runcmd "edc ${PREFIX} feed ${TESTFEED} reset insert --no-confirm"
+runcmd_should_fail "edc ${PREFIX} feed ${TESTFEED} reset unzip parse insert save dist --no-confirm"
+runcmd "edc ${PREFIX} feed ${TESTFEED} reset unzip parse insert dist --no-confirm"
 runcmd "edc ${PREFIX} feed ${TESTFEED} status --header"
 runcmd "edc ${PREFIX} feed ${TESTFEED} proc unzip parse insert"
 runcmd "edc ${PREFIX} feed ${TESTFEED} status --header"
