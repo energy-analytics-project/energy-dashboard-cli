@@ -274,6 +274,39 @@ def feed_status(ctx, separator, header):
     for line in clifeed.status(logger, feed, path, separator, header):
         click.echo(line)
 
+@feed.command('prune', short_help='prune feed stage')
+@click.argument('stages', nargs=-1)
+@click.option('--confirm/--no-confirm', default=True)
+@click.pass_context
+def feed_prune(ctx, stages, confirm):
+    """
+    !!!USE WITH CAUTION!!!
+
+    prune a stage. This is a destructive action, make backups first!.
+    This will delete the stage files, but not the directory and not
+    the state file.
+
+    !!!USE WITH CAUTION!!!
+
+    Stages are: ['download', 'unzip', 'parse' ]
+
+    """
+    feed    = ctx.obj[FEED]
+    path    = ctx.obj[EDDIR]
+    logger  = ctx.obj[LOGGER]
+
+    valid_stages    = ['download', 'unzip', 'parse']
+    all_stages      = copy.copy(valid_stages)
+    vstages = [filter_input_to_stage(all_stages, stage) for stage in stages]
+
+    for stage in vstages:
+        if confirm:
+            p = clifeed.pre_prune(logger, feed, path, stage)
+            if click.confirm('About to prune: %s. Do you want to continue?' % p):
+                click.echo(clifeed.prune(logger, feed, path, stage))
+        else:
+            click.echo(clifeed.prune(logger, feed, path, stage))
+
 @feed.command('reset', short_help='Reset feed stage')
 @click.argument('stages', nargs=-1)
 @click.option('--confirm/--no-confirm', default=True)

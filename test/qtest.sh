@@ -82,5 +82,7 @@ runcmd "edc ${PREFIX} feed ${TESTFEED} status --header"
 rm -rf ./data/${TESTFEED}
 runcmd "edc ${PREFIX} feed ${TESTFEED} restore ${ARCHIVE}"
 runcmd "edc ${PREFIX} feed ${TESTFEED} status --header"
+runcmd "edc ${PREFIX} feed ${TESTFEED} prune unzip --no-confirm"
+runcmd "edc ${PREFIX} feed ${TESTFEED} status --header"
 
 echo "QUICK TEST PASSED"
